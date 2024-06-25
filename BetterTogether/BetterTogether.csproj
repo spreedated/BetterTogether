@@ -4,7 +4,8 @@
     <TargetFrameworks>net8.0</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <Nullable>enable</Nullable>
-    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile Condition=" '$(Configuration)' == 'Release'">True</GenerateDocumentationFile>
     <Version>0.9.1</Version>
     <PackageId>BetterTogether</PackageId>
     <Title>BetterTogether</Title>
@@ -18,16 +19,17 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageTags>udp;multiplayer;networking;unity;easy;simple</PackageTags>
     <PackageReleaseNotes>Changelog available at https://github.com/ZedDevStuff/BetterTogether/blob/master/CHANGELOG.md</PackageReleaseNotes>
+    <GeneratePackageOnBuild Condition=" '$(Configuration)' == 'Release'">True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="LiteNetLib" Version="1.2.0" />
     <PackageReference Include="MemoryPack" Version="1.21.1" />
   </ItemGroup>
-
+  
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="" />
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath=""/>
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath=""/>
   </ItemGroup>
 
 </Project>
