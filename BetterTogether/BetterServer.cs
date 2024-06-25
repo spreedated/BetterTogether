@@ -1,4 +1,7 @@
-﻿using LiteNetLib;
+﻿using BetterTogether.Extensions;
+using BetterTogether.Enumerations;
+using BetterTogetherCore.Models;
+using LiteNetLib;
 using MemoryPack;
 using System;
 using System.Collections.Concurrent;
@@ -312,24 +315,24 @@ namespace BetterTogetherCore
                 Packet? packet = MemoryPackSerializer.Deserialize<Packet>(bytes);
                 if (packet != null)
                 {
-                    if (this.DataReceived != null) packet = this.DataReceived(peer, packet.Value);
+                    if (this.DataReceived != null) packet = this.DataReceived(peer, packet);
                     if (packet != null)
                     {
-                        switch (packet.Value.Type)
+                        switch (packet.Type)
                         {
                             case PacketType.Ping:
-                                if (packet.Value.Target == "server") peer.Send(bytes, deliveryMethod);
+                                if (packet.Target == "server") peer.Send(bytes, deliveryMethod);
                                 else
                                 {
-                                    NetPeer? targetPeer = this._Players.FirstOrDefault(x => x.Key == packet.Value.Target).Value;
+                                    NetPeer? targetPeer = this._Players.FirstOrDefault(x => x.Key == packet.Target).Value;
                                     if (origin != null && targetPeer != null)
                                     {
-                                        if (packet.Value.Key == "pong")
+                                        if (packet.Key == "pong")
                                         {
                                             Packet pong = new()
                                             {
                                                 Type = PacketType.Ping,
-                                                Target = packet.Value.Target
+                                                Target = packet.Target
                                             };
                                             targetPeer.Send(pong.Pack(), deliveryMethod);
                                         }
@@ -346,51 +349,51 @@ namespace BetterTogetherCore
                                 }
                                 break;
                             case PacketType.SetState:
-                                if (packet.Value.Target.Length == 36)
+                                if (packet.Target.Length == 36)
                                 {
-                                    if (packet.Value.Target == origin)
+                                    if (packet.Target == origin)
                                     {
-                                        this._States[origin + packet.Value.Key] = packet.Value.Data;
-                                        this.SyncState(packet.Value, bytes, deliveryMethod, peer);
+                                        this._States[origin + packet.Key] = packet.Data;
+                                        this.SyncState(packet, bytes, deliveryMethod, peer);
                                     }
                                 }
                                 else
                                 {
-                                    if (this.ReservedStates.Contains(packet.Value.Key))
+                                    if (this.ReservedStates.Contains(packet.Key))
                                     {
                                         byte[] data = [];
-                                        if (this._States.TryGetValue(packet.Value.Key, out byte[]? value)) data = value;
-                                        else this._States[packet.Value.Key] = data;
-                                        Packet response = new(PacketType.SetState, "FORBIDDEN", packet.Value.Key, data);
+                                        if (this._States.TryGetValue(packet.Key, out byte[]? value)) data = value;
+                                        else this._States[packet.Key] = data;
+                                        Packet response = new(PacketType.SetState, "FORBIDDEN", packet.Key, data);
                                         peer.Send(response.Pack(), DeliveryMethod.ReliableOrdered);
                                     }
-                                    this._States[packet.Value.Key] = packet.Value.Data;
-                                    this.SyncState(packet.Value, bytes, deliveryMethod, peer);
+                                    this._States[packet.Key] = packet.Data;
+                                    this.SyncState(packet, bytes, deliveryMethod, peer);
                                 }
                                 break;
                             case PacketType.RPC:
-                                if (this.GetPeer(packet.Value.Target) != null)
+                                if (this.GetPeer(packet.Target) != null)
                                 {
-                                    this.SendRPC(bytes, packet.Value.Target, RpcMode.Target, deliveryMethod);
+                                    this.SendRPC(bytes, packet.Target, RpcMode.Target, deliveryMethod);
                                 }
                                 else
                                 {
                                     string peerId = this.GetPeerId(peer);
-                                    switch (packet.Value.Target)
+                                    switch (packet.Target)
                                     {
                                         case "self":
                                             this.SendRPC(bytes, peerId, RpcMode.Target, deliveryMethod);
                                             break;
                                         case "all":
-                                            Packet allPacket = new(packet.Value.Type, peerId, packet.Value.Key, packet.Value.Data);
+                                            Packet allPacket = new(packet.Type, peerId, packet.Key, packet.Data);
                                             this.SendRPC(allPacket.Pack(), "", RpcMode.All, deliveryMethod);
                                             break;
                                         case "others":
-                                            Packet othersPacket = new(packet.Value.Type, peerId, packet.Value.Key, packet.Value.Data);
+                                            Packet othersPacket = new(packet.Type, peerId, packet.Key, packet.Data);
                                             this.SendRPC(othersPacket.Pack(), peerId, RpcMode.Others, deliveryMethod);
                                             break;
                                         case "server":
-                                            this.HandleRPC(packet.Value.Key, packet.Value.Data, peer);
+                                            this.HandleRPC(packet.Key, packet.Data, peer);
                                             break;
                                         default:
                                             break;
