@@ -11,14 +11,24 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace BetterTogetherCore
 {
     /// <summary>
     /// The BetterTogether server. Create one with a max player count then use the Start method to start the server on the specified port. Set the <c>DataReceived</c> <c>Func<![CDATA[<]]>NetPeer, Packet, Packet<![CDATA[>]]></c> for your data validation and handling.
     /// </summary>
-    public class BetterServer
+    public class BetterServer : IDisposable
     {
+        private bool disposedValue;
+        private CancellationTokenSource? _PollToken;
+        private readonly ConcurrentDictionary<string, byte[]> _States = new();
+        private readonly ConcurrentDictionary<string, Dictionary<string, byte[]>> _PlayerStatesToSet = new();
+        private readonly Dictionary<string, ServerRpcAction> _RegisteredRPCs = [];
+        private readonly ConcurrentDictionary<string, NetPeer> _Players = new();
+        private readonly ConcurrentDictionary<string, bool> _Admins = new();
+        private readonly List<string> _Banned = [];
+
         /// <summary>
         /// The delay between polling events in milliseconds. Default is 15ms
         /// </summary>
@@ -32,20 +42,17 @@ namespace BetterTogetherCore
         /// <summary>
         /// Whether this server allows admin users
         /// </summary>
-        public bool AllowAdminUsers { get; private set; } = false;
+        public bool AllowAdminUsers { get; private set; }
 
         /// <summary>
         /// The underlying <c>LiteNetLib.NetManager</c>
         /// </summary>
-        public NetManager? NetManager { get; private set; } = null;
+        public NetManager? NetManager { get; private set; }
 
         /// <summary>
         /// The underlying <c>LiteNetLib.EventBasedNetListener</c>
         /// </summary>
         public EventBasedNetListener Listener { get; private set; } = new EventBasedNetListener();
-        private CancellationTokenSource? _PollToken { get; set; } = null;
-        private ConcurrentDictionary<string, byte[]> _States { get; set; } = new();
-        private ConcurrentDictionary<string, Dictionary<string, byte[]>> _PlayerStatesToSet { get; set; } = new();
 
         /// <summary>
         /// The reserved states for the server. Only the server (and admins if setup correctly) can modify these states
@@ -56,20 +63,18 @@ namespace BetterTogetherCore
         /// Returns a read-only dictionary of the states on the server
         /// </summary>
         public ReadOnlyDictionary<string, byte[]> States => new(this._States);
-        private Dictionary<string, ServerRpcAction> RegisteredRPCs { get; set; } = [];
-        private ConcurrentDictionary<string, NetPeer> _Players { get; set; } = new();
-        private ConcurrentDictionary<string, bool> _Admins { get; set; } = new();
-        private List<string> _Banned { get; set; } = [];
 
         /// <summary>
         /// Returns a read-only dictionary of the players on the server
         /// </summary>
         public ReadOnlyDictionary<string, NetPeer> Players => new(this._Players);
 
+        public bool IsPolling { get; private set; }
+
         /// <summary>
         /// Returns a list of all the players that are admins
         /// </summary>
-        public List<string> GetAdminList()
+        public IEnumerable<string> GetAdminList()
         {
             return [.. this._Admins.Keys];
         }
@@ -77,8 +82,15 @@ namespace BetterTogetherCore
         /// <summary>
         /// Returns a list of all the banned IP addresses
         /// </summary>
-        public List<string> Banned => this._Banned;
+        public IEnumerable<string> Banned
+        {
+            get
+            {
+                return this._Banned;
+            }
+        }
 
+        #region Constructor
         /// <summary>
         /// Creates a new server
         /// </summary>
@@ -89,6 +101,7 @@ namespace BetterTogetherCore
             this.Listener.NetworkReceiveEvent += this.Listener_NetworkReceiveEvent;
             this.Listener.PeerDisconnectedEvent += this.Listener_PeerDisconnectedEvent;
         }
+        #endregion
 
         /// <summary>
         /// Sets the interval between polling events. Default is 15ms
@@ -128,9 +141,9 @@ namespace BetterTogetherCore
         /// </summary>
         /// <param name="addresses"></param>
         /// <returns>This server</returns>
-        public BetterServer WithBannedUsers(List<string> addresses)
+        public BetterServer WithBannedUsers(IEnumerable<string> addresses)
         {
-            this._Banned = new List<string>(addresses);
+            this._Banned.AddRange(addresses);
             return this;
         }
 
@@ -144,32 +157,45 @@ namespace BetterTogetherCore
             this.ReservedStates = new List<string>(states);
             return this;
         }
-        private void PollEvents()
+
+        private async Task PollEvents()
         {
             while (true)
             {
-                if (this._PollToken?.IsCancellationRequested == true) break;
-                this.NetManager?.PollEvents();
-                Thread.Sleep(15);
+                if (this._PollToken != null && this._PollToken.IsCancellationRequested)
+                {
+                    this.IsPolling = false;
+                    break;
+                }
+
+                this.IsPolling = true;
+                this.NetManager!.PollEvents();
+                await Task.Delay(50);
             }
         }
 
         /// <summary>
-        /// Starts the server on the specified port
+        /// Starts the server on the specified port<br/>
+        /// creates a separate thread
         /// </summary>
         /// <param name="port">The port to start the server on. Default is 9050</param>
         /// <returns><c>true</c> if the server started successfully, <c>false</c> otherwise</returns>
         public bool Start(int port = 9050)
         {
-            this.NetManager = new NetManager(this.Listener);
+            if (this.NetManager != null && this.NetManager.IsRunning)
+            {
+                return false;
+            }
+
+            this.NetManager = new(this.Listener);
             try
             {
                 if (this.NetManager.Start(port))
                 {
-                    this._PollToken = new CancellationTokenSource();
-                    Thread thread = new(this.PollEvents);
-                    thread.Start();
-                    return true;
+                    this._PollToken = new();
+
+                    Task.Run(this.PollEvents);
+                    return this.IsPolling;
                 }
                 else
                 {
@@ -188,16 +214,20 @@ namespace BetterTogetherCore
         /// <summary>
         /// Stops the server
         /// </summary>
-        public BetterServer Stop()
+        public void Stop()
         {
             this._PollToken?.Cancel();
-            if (this.NetManager == null) return this;
+
+            if (this.NetManager == null)
+            {
+                return;
+            }
+
             this._Players.Clear();
             this._Admins.Clear();
             this._States.Clear();
             this.NetManager?.Stop();
             this.NetManager = null;
-            return this;
         }
 
         /// <summary>
@@ -545,7 +575,7 @@ namespace BetterTogetherCore
         /// <returns>This server</returns>
         public BetterServer RegisterRPC(string method, ServerRpcAction action)
         {
-            this.RegisteredRPCs[method] = action;
+            this._RegisteredRPCs[method] = action;
             return this;
         }
 
@@ -557,7 +587,7 @@ namespace BetterTogetherCore
         public delegate void ServerRpcAction(NetPeer? peer, byte[] args);
         private void HandleRPC(string method, byte[] args, NetPeer? peer = null)
         {
-            if (this.RegisteredRPCs.TryGetValue(method, out ServerRpcAction? value))
+            if (this._RegisteredRPCs.TryGetValue(method, out ServerRpcAction? value))
             {
                 value(peer, args);
             }
@@ -667,5 +697,27 @@ namespace BetterTogetherCore
         {
             return this._Admins.ContainsKey(id);
         }
+
+        #region Dispose
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    this.Stop();
+                    this._PollToken?.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            this.Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

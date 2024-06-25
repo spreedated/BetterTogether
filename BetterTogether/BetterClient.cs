@@ -20,8 +20,18 @@ namespace BetterTogetherCore
     /// <summary>
     /// A BetterTogether client that connects to a BetterTogether server
     /// </summary>
-    public class BetterClient
+    public partial class BetterClient : IDisposable
     {
+        [GeneratedRegex(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", RegexOptions.Compiled)]
+        private partial Regex Regex1();
+        private bool disposedValue;
+        private CancellationTokenSource? _PollToken = null;
+        private readonly Dictionary<string, byte[]> _InitStates = [];
+        private readonly ConcurrentDictionary<string, byte[]> _States = new();
+        private readonly Dictionary<string, ClientRpcAction> _RegisteredRPCs = [];
+        private readonly Dictionary<string, Action<Packet>> _RegisteredEvents = [];
+        private List<string> _Players = [];
+
         /// <summary>
         /// The id assigned to this client by the server
         /// </summary>
@@ -32,7 +42,6 @@ namespace BetterTogetherCore
         /// </summary>
         public int PollInterval { get; private set; } = 15;
 
-        private List<string> _Players { get; set; } = [];
 
         /// <summary>
         /// Returns a list of all connected players
@@ -49,12 +58,7 @@ namespace BetterTogetherCore
         /// </summary>
         public EventBasedNetListener Listener { get; private set; } = new EventBasedNetListener();
 
-        private CancellationTokenSource? _PollToken { get; set; } = null;
-        private Dictionary<string, byte[]> _InitStates { get; set; } = [];
-        private ConcurrentDictionary<string, byte[]> _States { get; set; } = new();
-        private Dictionary<string, ClientRpcAction> RegisteredRPCs { get; set; } = [];
-        private Dictionary<string, Action<Packet>> RegisteredEvents { get; set; } = [];
-
+        #region Constructor
         /// <summary>
         /// Creates a new BetterClient
         /// </summary>
@@ -63,6 +67,27 @@ namespace BetterTogetherCore
             this.Listener.NetworkReceiveEvent += this.Listener_NetworkReceiveEvent;
             this.Listener.PeerDisconnectedEvent += this.Listener_PeerDisconnectedEvent;
         }
+        #endregion
+
+        /// <summary>
+        /// Adds states to the initial states of the client<br/>
+        /// Is clear needed or inteded?
+        /// </summary>
+        /// <param name="states"></param>
+        /// <param name="clear"></param>
+        private void AddStates(IDictionary<string, byte[]> states, bool clear = false)
+        {
+            if (clear)
+            {
+                this._InitStates.Clear();
+            }
+
+            foreach (KeyValuePair<string, byte[]> state in states)
+            {
+                this._InitStates[state.Key] = state.Value;
+            }
+        }
+
         /// <summary>
         /// Sets the interval between polling events. Default is 15ms
         /// </summary>
@@ -79,9 +104,9 @@ namespace BetterTogetherCore
         /// </summary>
         /// <param name="states"></param>
         /// <returns>This client</returns>
-        public BetterClient WithInitStates(Dictionary<string, byte[]> states)
+        public BetterClient WithInitStates(IDictionary<string, byte[]> states)
         {
-            this._InitStates = states;
+            this.AddStates(states);
             return this;
         }
 
@@ -184,14 +209,14 @@ namespace BetterTogetherCore
                             this._States[packet.Key] = packet.Data;
                         }
                         this._States[packet.Key] = packet.Data;
-                        if (this.RegisteredEvents.TryGetValue(packet.Key, out Action<Packet>? value))
+                        if (this._RegisteredEvents.TryGetValue(packet.Key, out Action<Packet>? value))
                         {
                             value(packet);
                         }
                         break;
                     case PacketType.Init:
                         var states = packet.GetData<ConcurrentDictionary<string, byte[]>>();
-                        if (states != null) this._States = states;
+                        if (states != null) this.AddStates(states, true);
                         break;
                     case PacketType.RPC:
                         this.HandleRPC(packet.Key, packet.Target, packet.Data);
@@ -390,8 +415,7 @@ namespace BetterTogetherCore
 
         private void ClearAllPlayerStates(List<string> except)
         {
-            Regex regex = new(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
-            var playerStates = this._States.Where(x => regex.IsMatch(x.Key) && !except.Contains(x.Key[..36])).ToList();
+            var playerStates = this._States.Where(x => this.Regex1().IsMatch(x.Key) && !except.Contains(x.Key[..36])).ToList();
             foreach (var state in playerStates)
             {
                 this._States.TryRemove(state.Key, out _);
@@ -406,13 +430,13 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RegisterRPC(string method, ClientRpcAction action)
         {
-            this.RegisteredRPCs[method] = action;
+            this._RegisteredRPCs[method] = action;
             return this;
         }
 
         private void HandleRPC(string method, string player, byte[] args)
         {
-            if (this.RegisteredRPCs.TryGetValue(method, out ClientRpcAction? value))
+            if (this._RegisteredRPCs.TryGetValue(method, out ClientRpcAction? value))
             {
                 value(player, args);
             }
@@ -610,7 +634,7 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient On(string key, Action<Packet> action)
         {
-            this.RegisteredEvents[key] = action;
+            this._RegisteredEvents[key] = action;
             return this;
         }
 
@@ -621,7 +645,7 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient Off(string key)
         {
-            this.RegisteredEvents.Remove(key);
+            this._RegisteredEvents.Remove(key);
             return this;
         }
 
@@ -787,5 +811,27 @@ namespace BetterTogetherCore
             Banned += action;
             return this;
         }
+
+        #region Dispose
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    this.Disconnect();
+                    this._PollToken?.Dispose();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            this.Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }
