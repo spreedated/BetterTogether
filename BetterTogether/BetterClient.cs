@@ -11,7 +11,6 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-
 namespace BetterTogetherCore
 {
     /// <summary>
@@ -23,23 +22,29 @@ namespace BetterTogetherCore
         /// The id assigned to this client by the server
         /// </summary>
         public string Id { get; private set; } = "";
+
         /// <summary>
         /// The delay between polling events in milliseconds. Default is 15ms
         /// </summary>
         public int PollInterval { get; private set; } = 15;
+
         private List<string> _Players { get; set; } = [];
+
         /// <summary>
         /// Returns a list of all connected players
         /// </summary>
         public List<string> Players => new(this._Players);
+
         /// <summary>
         /// The underlying <c>LiteNetLib.NetManager</c>
         /// </summary>
         public NetManager? NetManager { get; private set; } = null;
+
         /// <summary>
         /// The underlying <c>LiteNetLib.EventBasedNetListener</c>
         /// </summary>
         public EventBasedNetListener Listener { get; private set; } = new EventBasedNetListener();
+
         private CancellationTokenSource? _PollToken { get; set; } = null;
         private Dictionary<string, byte[]> _InitStates { get; set; } = [];
         private ConcurrentDictionary<string, byte[]> _States { get; set; } = new();
@@ -64,6 +69,7 @@ namespace BetterTogetherCore
             this.PollInterval = interval;
             return this;
         }
+
         /// <summary>
         /// Sets the initial states of the client
         /// </summary>
@@ -74,6 +80,7 @@ namespace BetterTogetherCore
             this._InitStates = states;
             return this;
         }
+
         private void PollEvents()
         {
             while (this.NetManager != null)
@@ -83,6 +90,7 @@ namespace BetterTogetherCore
                 Thread.Sleep(this.PollInterval);
             }
         }
+
         /// <summary>
         /// Connects the client to the target server
         /// </summary>
@@ -117,6 +125,7 @@ namespace BetterTogetherCore
                 return false;
             }
         }
+
         /// <summary>
         /// Disconnects the client from the server
         /// </summary>
@@ -133,6 +142,7 @@ namespace BetterTogetherCore
             this.NetManager = null;
             return this;
         }
+
         private void Listener_NetworkReceiveEvent(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
         {
             if (reader.AvailableBytes > 0)
@@ -354,10 +364,12 @@ namespace BetterTogetherCore
                 this._States.TryRemove(state.Key, out _);
             }
         }
+
         private void DeletePlayerState(string player, string key)
         {
             this._States.TryRemove(player + key, out _);
         }
+
         private void ClearSpecificPlayerStates(string player, List<string> except)
         {
             foreach (var key in except)
@@ -365,6 +377,7 @@ namespace BetterTogetherCore
                 this._States.TryRemove(player + key, out _);
             }
         }
+
         private void ClearAllPlayerStates(List<string> except)
         {
             Regex regex = new(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
@@ -386,6 +399,7 @@ namespace BetterTogetherCore
             this.RegisteredRPCs[method] = action;
             return this;
         }
+
         private void HandleRPC(string method, string player, byte[] args)
         {
             if (this.RegisteredRPCs.TryGetValue(method, out ClientRpcAction? value))
@@ -414,6 +428,7 @@ namespace BetterTogetherCore
             this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
+
         /// <summary>
         /// Sends a Remote Procedure Call to the server then back to this client
         /// </summary>
@@ -449,6 +464,7 @@ namespace BetterTogetherCore
             this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
+
         /// <summary>
         /// Sends a Remote Procedure Call to the target player
         /// </summary>
@@ -484,6 +500,7 @@ namespace BetterTogetherCore
             this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
+
         /// <summary>
         /// Sends a Remote Procedure Call to all players including the current player
         /// </summary>
@@ -518,6 +535,7 @@ namespace BetterTogetherCore
             this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
+
         /// <summary>
         /// Sends a Remote Procedure Call to the server
         /// </summary>
@@ -552,6 +570,7 @@ namespace BetterTogetherCore
             this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
+
         /// <summary>
         /// Sends a Remote Procedure Call to the server
         /// </summary>
@@ -565,6 +584,7 @@ namespace BetterTogetherCore
             byte[] bytes = MemoryPackSerializer.Serialize(args);
             return this.RpcServer(method, bytes, delMethod);
         }
+
         /// <summary>
         /// A delegate for RPC actions on the client
         /// </summary>
@@ -583,6 +603,7 @@ namespace BetterTogetherCore
             this.RegisteredEvents[key] = action;
             return this;
         }
+
         /// <summary>
         /// Removes an action from the registered events
         /// </summary>
@@ -626,6 +647,7 @@ namespace BetterTogetherCore
             _Ping = null;
             return delay;
         }
+
         /// <summary>
         /// Sends a ping to a player and returns the delay. Only call once at a time
         /// </summary>
@@ -665,6 +687,7 @@ namespace BetterTogetherCore
         /// Fired when the client is connected to the server. The string is the id assigned to this client by the server. You can also use <c>Client.Id</c> as it is assigned before this is called. The List is the list of all connected players exluding this player
         /// </summary>
         public event Action<string, List<string>>? Connected;
+
         /// <summary>
         /// Fluent version of <c>Connected</c>
         /// </summary>
@@ -695,6 +718,7 @@ namespace BetterTogetherCore
         /// Fired when a player is connected to the server. The string is the id of the player
         /// </summary>
         public event Action<string>? PlayerConnected;
+
         /// <summary>
         /// Fluent version of <c>PlayerConnected</c>
         /// </summary>
@@ -705,10 +729,12 @@ namespace BetterTogetherCore
             PlayerConnected += action;
             return this;
         }
+
         /// <summary>
         /// Fired when a player is disconnected from the server. The string is the id of the player
         /// </summary>
         public event Action<string>? PlayerDisconnected;
+
         /// <summary>
         /// Fluent version of <c>PlayerDisconnected</c>
         /// </summary>
@@ -719,10 +745,12 @@ namespace BetterTogetherCore
             PlayerDisconnected += action;
             return this;
         }
+
         /// <summary>
         /// Fired when a player is kicked from the server. The string is the reason of the kick
         /// </summary>
         public event Action<string>? Kicked;
+
         /// <summary>
         /// Fluent version of <c>Kicked</c>
         /// </summary>
@@ -733,10 +761,12 @@ namespace BetterTogetherCore
             Kicked += action;
             return this;
         }
+
         /// <summary>
         /// Fired when a player is banned from the server. The string is the reason of the ban
         /// </summary>
         public event Action<string>? Banned;
+
         /// <summary>
         /// Fluent version of <c>Banned</c>
         /// </summary>

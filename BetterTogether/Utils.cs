@@ -34,6 +34,7 @@ namespace BetterTogetherCore
         /// The key of the connection
         /// </summary>
         public string Key { get; set; } = "BetterTogether";
+
         /// <summary>
         /// The initial states
         /// </summary>
@@ -43,6 +44,7 @@ namespace BetterTogetherCore
         /// Constructor 
         /// </summary>
         public ConnectionData() { }
+
         /// <summary>
         /// Constructor with key
         /// </summary>
@@ -51,6 +53,7 @@ namespace BetterTogetherCore
         {
             this.Key = key;
         }
+
         /// <summary>
         /// Constructor with key and initial states
         /// </summary>
@@ -62,6 +65,7 @@ namespace BetterTogetherCore
             this.Key = key;
             this.InitStates = initStates;
         }
+
         /// <summary>
         /// Sets the specified state
         /// </summary>
@@ -74,6 +78,7 @@ namespace BetterTogetherCore
             this.InitStates[key] = MemoryPackSerializer.Serialize(data);
             return this;
         }
+
         /// <summary>
         /// Deletes the specified state
         /// </summary>

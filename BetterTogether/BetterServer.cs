@@ -19,18 +19,22 @@ namespace BetterTogetherCore
         /// The delay between polling events in milliseconds. Default is 15ms
         /// </summary>
         public int PollInterval { get; private set; } = 15;
+
         /// <summary>
         /// The max amount of players
         /// </summary>
         public int MaxPlayers { get; private set; } = 10;
+
         /// <summary>
         /// Whether this server allows admin users
         /// </summary>
         public bool AllowAdminUsers { get; private set; } = false;
+
         /// <summary>
         /// The underlying <c>LiteNetLib.NetManager</c>
         /// </summary>
         public NetManager? NetManager { get; private set; } = null;
+
         /// <summary>
         /// The underlying <c>LiteNetLib.EventBasedNetListener</c>
         /// </summary>
@@ -38,10 +42,12 @@ namespace BetterTogetherCore
         private CancellationTokenSource? _PollToken { get; set; } = null;
         private ConcurrentDictionary<string, byte[]> _States { get; set; } = new();
         private ConcurrentDictionary<string, Dictionary<string, byte[]>> _PlayerStatesToSet { get; set; } = new();
+
         /// <summary>
         /// The reserved states for the server. Only the server (and admins if setup correctly) can modify these states
         /// </summary>
         public List<string> ReservedStates { get; private set; } = [];
+
         /// <summary>
         /// Returns a read-only dictionary of the states on the server
         /// </summary>
@@ -50,10 +56,12 @@ namespace BetterTogetherCore
         private ConcurrentDictionary<string, NetPeer> _Players { get; set; } = new();
         private ConcurrentDictionary<string, bool> _Admins { get; set; } = new();
         private List<string> _Banned { get; set; } = [];
+
         /// <summary>
         /// Returns a read-only dictionary of the players on the server
         /// </summary>
         public ReadOnlyDictionary<string, NetPeer> Players => new(this._Players);
+
         /// <summary>
         /// Returns a list of all the players that are admins
         /// </summary>
@@ -67,8 +75,6 @@ namespace BetterTogetherCore
         /// </summary>
         public List<string> Banned => this._Banned;
 
-
-
         /// <summary>
         /// Creates a new server
         /// </summary>
@@ -79,6 +85,7 @@ namespace BetterTogetherCore
             this.Listener.NetworkReceiveEvent += this.Listener_NetworkReceiveEvent;
             this.Listener.PeerDisconnectedEvent += this.Listener_PeerDisconnectedEvent;
         }
+
         /// <summary>
         /// Sets the interval between polling events. Default is 15ms
         /// </summary>
@@ -89,6 +96,7 @@ namespace BetterTogetherCore
             this.PollInterval = interval;
             return this;
         }
+
         /// <summary>
         /// The max amount of players
         /// </summary>
@@ -99,6 +107,7 @@ namespace BetterTogetherCore
             this.MaxPlayers = maxPlayers;
             return this;
         }
+
         /// <summary>
         /// Whether this server allows admin users
         /// </summary>
@@ -109,6 +118,7 @@ namespace BetterTogetherCore
             this.AllowAdminUsers = allowAdminUsers;
             return this;
         }
+
         /// <summary>
         /// Sets the banlist for the server
         /// </summary>
@@ -119,6 +129,7 @@ namespace BetterTogetherCore
             this._Banned = new List<string>(addresses);
             return this;
         }
+
         /// <summary>
         /// Sets the reserved states for the server
         /// </summary>
@@ -138,6 +149,7 @@ namespace BetterTogetherCore
                 Thread.Sleep(15);
             }
         }
+
         /// <summary>
         /// Starts the server on the specified port
         /// </summary>
@@ -199,6 +211,7 @@ namespace BetterTogetherCore
                 peer.Disconnect(Encoding.UTF8.GetBytes("Kicked: " + reason));
             }
         }
+
         /// <summary>
         /// Bans a player from the server using their IP address
         /// </summary>
@@ -257,6 +270,7 @@ namespace BetterTogetherCore
                 request.Reject(Encoding.UTF8.GetBytes(reason));
             }
         }
+
         private void Listener_PeerConnectedEvent(NetPeer peer)
         {
             string id = Guid.NewGuid().ToString();
@@ -288,6 +302,7 @@ namespace BetterTogetherCore
             Packet packet3 = new(PacketType.Init, "", "Init", states);
             peer.Send(packet3.Pack(), DeliveryMethod.ReliableOrdered);
         }
+
         private void Listener_NetworkReceiveEvent(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
         {
             if (reader.AvailableBytes > 0)
@@ -389,6 +404,7 @@ namespace BetterTogetherCore
                 }
             }
         }
+
         private void Listener_PeerDisconnectedEvent(NetPeer peer, DisconnectInfo info)
         {
             string disconnectedId = this.GetPeerId(peer);
@@ -396,6 +412,7 @@ namespace BetterTogetherCore
             Packet packet = new(PacketType.PeerDisconnected, "", "Disconnected", Encoding.UTF8.GetBytes(disconnectedId));
             this.SendAll(packet.Pack(), DeliveryMethod.ReliableOrdered, peer);
         }
+
         /// <summary>
         /// Syncs the state to all connected peers
         /// </summary>
@@ -424,6 +441,7 @@ namespace BetterTogetherCore
                 }
             }
         }
+
         /// <summary>
         /// Deletes the state with the specified key
         /// </summary>
@@ -435,6 +453,7 @@ namespace BetterTogetherCore
             Packet delete = new(PacketType.DeleteState, "global", key, [0]);
             this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
+
         /// <summary>
         /// Clears all global states except for the specified keys
         /// </summary>
@@ -451,6 +470,7 @@ namespace BetterTogetherCore
             this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
 
         }
+
         /// <summary>
         /// Deletes the player state with the specified key
         /// </summary>
@@ -462,6 +482,7 @@ namespace BetterTogetherCore
             Packet delete = new(PacketType.DeleteState, player, key, [0]);
             this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
+
         /// <summary>
         /// Clears all player states for the specific player except for the specified keys
         /// </summary>
@@ -476,6 +497,7 @@ namespace BetterTogetherCore
             Packet delete = new(PacketType.DeleteState, player, "", MemoryPackSerializer.Serialize(except));
             this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
+
         /// <summary>
         /// Clears all player states except for the specified keys
         /// </summary>
@@ -490,6 +512,7 @@ namespace BetterTogetherCore
             Packet delete = new(PacketType.DeleteState, "players", "", MemoryPackSerializer.Serialize(except));
             this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
+
         private void SendRPC(byte[] rawPacket, string target, RpcMode mode, DeliveryMethod method)
         {
             NetPeer? targetPeer = this.GetPeer(target);
@@ -509,6 +532,7 @@ namespace BetterTogetherCore
                     break;
             }
         }
+
         /// <summary>
         /// Registers a Remote Procedure Call with a method name and an action to invoke.
         /// </summary>
@@ -520,6 +544,7 @@ namespace BetterTogetherCore
             this.RegisteredRPCs[method] = action;
             return this;
         }
+
         /// <summary>
         /// A delegate for RPC actions on the server
         /// </summary>
@@ -533,6 +558,7 @@ namespace BetterTogetherCore
                 value(peer, args);
             }
         }
+
         /// <summary>
         /// Calls a registered RPC on this server
         /// </summary>
@@ -542,6 +568,7 @@ namespace BetterTogetherCore
         {
             this.HandleRPC(method, args);
         }
+
         /// <summary>
         /// Calls a registered RPC on this server
         /// </summary>
@@ -594,6 +621,7 @@ namespace BetterTogetherCore
         {
             return this._Players.FirstOrDefault(x => x.Value == peer).Key ?? string.Empty;
         }
+
         /// <summary>
         /// Attempts to get a peer by id
         /// </summary>
@@ -603,6 +631,7 @@ namespace BetterTogetherCore
         {
             return this._Players.FirstOrDefault(x => x.Key == id).Value;
         }
+
         /// <summary>
         /// Checks if a string is a valid GUID
         /// </summary>
@@ -613,6 +642,7 @@ namespace BetterTogetherCore
             if (id.Length != 36) return false;
             return Utils.guidRegex.IsMatch(id);
         }
+
         /// <summary>
         /// Checks if a string starts with a GUID
         /// </summary>
@@ -623,6 +653,7 @@ namespace BetterTogetherCore
             if (id.Length < 36) return false;
             return Utils.guidRegex.IsMatch(id.AsSpan(0, 36));
         }
+
         /// <summary>
         /// Checks if a player is an admin
         /// </summary>

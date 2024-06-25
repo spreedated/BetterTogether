@@ -9,14 +9,17 @@ namespace BetterTogetherCore
         /// The type of the packet
         /// </summary>
         public PacketType Type { get; set; } = PacketType.None;
+
         /// <summary>
         /// The target of the packet. This can be an id or a name like "server"
         /// </summary>
         public string Target { get; set; } = "";
+
         /// <summary>
         /// The key is used differently depending on the packet type. For example, in a SetState packet, the key is the state name.
         /// </summary>
         public string Key { get; set; } = "";
+
         /// <summary>
         /// The data of the packet. This can be anything Memorypack can handle.
         /// </summary>
@@ -42,6 +45,7 @@ namespace BetterTogetherCore
             this.Key = key;
             this.Data = data;
         }
+
         /// <summary>
         /// Create a new packet with the specified data type. MemoryPack can't serialize <c>object</c> so generics are used.
         /// </summary>
@@ -53,6 +57,7 @@ namespace BetterTogetherCore
         {
             return new Packet(type, target, key, MemoryPackSerializer.Serialize(data));
         }
+
         /// <summary>
         /// Deserializes the data of the packet to the specified type
         /// </summary>
@@ -63,6 +68,7 @@ namespace BetterTogetherCore
             if (this.Data.Length == 0) return default; // Return null if the data is empty (no data to deserialize
             return MemoryPackSerializer.Deserialize<T>(this.Data);
         }
+
         /// <summary>
         /// Sets the data of the packet to the specified object
         /// </summary>
@@ -82,6 +88,7 @@ namespace BetterTogetherCore
             return MemoryPackSerializer.Serialize(this);
         }
     }
+
     /// <summary>
     /// Various types of packets
     /// </summary>
