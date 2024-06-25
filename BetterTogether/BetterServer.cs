@@ -4,6 +4,7 @@ using BetterTogether.Models;
 using BetterTogetherCore.Models;
 using LiteNetLib;
 using MemoryPack;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -28,6 +29,7 @@ namespace BetterTogetherCore
         private readonly ConcurrentDictionary<string, NetPeer> _Players = new();
         private readonly ConcurrentDictionary<string, bool> _Admins = new();
         private readonly List<string> _Banned = [];
+        private readonly ILogger? _Logger;
 
         /// <summary>
         /// The delay between polling events in milliseconds. Default is 15ms
@@ -52,7 +54,7 @@ namespace BetterTogetherCore
         /// <summary>
         /// The underlying <c>LiteNetLib.EventBasedNetListener</c>
         /// </summary>
-        public EventBasedNetListener Listener { get; private set; } = new EventBasedNetListener();
+        public EventBasedNetListener Listener { get; private set; } = new();
 
         /// <summary>
         /// The reserved states for the server. Only the server (and admins if setup correctly) can modify these states
@@ -94,8 +96,9 @@ namespace BetterTogetherCore
         /// <summary>
         /// Creates a new server
         /// </summary>
-        public BetterServer()
+        public BetterServer(ILogger? logger = null)
         {
+            this._Logger = logger;
             this.Listener.ConnectionRequestEvent += this.Listener_ConnectionRequestEvent;
             this.Listener.PeerConnectedEvent += this.Listener_PeerConnectedEvent;
             this.Listener.NetworkReceiveEvent += this.Listener_NetworkReceiveEvent;
@@ -130,9 +133,9 @@ namespace BetterTogetherCore
         /// </summary>
         /// <param name="allowAdminUsers"></param>
         /// <returns>This server</returns>
-        public BetterServer WithAdminUsers(bool allowAdminUsers)
+        public BetterServer WithAdminUsers()
         {
-            this.AllowAdminUsers = allowAdminUsers;
+            this.AllowAdminUsers = true;
             return this;
         }
 
@@ -152,9 +155,9 @@ namespace BetterTogetherCore
         /// </summary>
         /// <param name="states"></param>
         /// <returns></returns>
-        public BetterServer WithReservedStates(List<string> states)
+        public BetterServer WithReservedStates(IEnumerable<string> states)
         {
-            this.ReservedStates = new List<string>(states);
+            this.ReservedStates = new(states);
             return this;
         }
 
@@ -288,7 +291,7 @@ namespace BetterTogetherCore
                 foreach (var state in data.InitStates)
                 {
                     if (this.ReservedStates.Contains(state.Key)) continue;
-                    if (state.Key.FastStartsWith("[player]"))
+                    if (state.Key.StartsWith("[player]"))
                     {
                         string ipPort = request.RemoteEndPoint.ToString();
                         if (!this._PlayerStatesToSet.ContainsKey(ipPort)) this._PlayerStatesToSet[ipPort] = [];
@@ -308,15 +311,19 @@ namespace BetterTogetherCore
         private void Listener_PeerConnectedEvent(NetPeer peer)
         {
             string id = Guid.NewGuid().ToString();
+
             while (this._Players.ContainsKey(id))
             {
                 id = Guid.NewGuid().ToString();
             }
+
             if (this.AllowAdminUsers && this._Players.IsEmpty)
             {
                 this._Admins[id] = true;
             }
+
             string ipPort = peer.Address.ToString() + ":" + peer.Port;
+
             if (this._PlayerStatesToSet.TryGetValue(ipPort, out Dictionary<string, byte[]>? value))
             {
                 foreach (var state in value)
@@ -325,6 +332,7 @@ namespace BetterTogetherCore
                 }
                 this._PlayerStatesToSet.TryRemove(ipPort, out _);
             }
+
             List<string> players = [id, .. this._Players.Keys];
             Packet packet1 = new(PacketType.PeerConnected, "", "Connected", Encoding.UTF8.GetBytes(id));
             this.SendAll(packet1.Pack(), DeliveryMethod.ReliableOrdered, peer);
@@ -334,108 +342,118 @@ namespace BetterTogetherCore
             peer.Send(packet2.Pack(), DeliveryMethod.ReliableOrdered);
             byte[] states = MemoryPackSerializer.Serialize(this._States);
             Packet packet3 = new(PacketType.Init, "", "Init", states);
+
             peer.Send(packet3.Pack(), DeliveryMethod.ReliableOrdered);
         }
 
         private void Listener_NetworkReceiveEvent(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
         {
-            if (reader.AvailableBytes > 0)
+            if (reader == null || reader.AvailableBytes > 0)
             {
-                string origin = this.GetPeerId(peer);
-                byte[] bytes = reader.GetRemainingBytes();
-                Packet? packet = MemoryPackSerializer.Deserialize<Packet>(bytes);
-                if (packet != null)
-                {
-                    if (this.DataReceived != null) packet = this.DataReceived(peer, packet);
-                    if (packet != null)
+                return;
+            }
+
+            string origin = this.GetPeerId(peer);
+            byte[] bytes = reader.GetRemainingBytes();
+            Packet? packet = MemoryPackSerializer.Deserialize<Packet>(bytes);
+
+            if (packet == null)
+            {
+                return;
+            }
+
+            if (this.DataReceived != null)
+            {
+                packet = this.DataReceived(peer, packet);
+            }
+
+            switch (packet!.Type)
+            {
+                case PacketType.Ping:
+                    if (packet.Target == "server")
                     {
-                        switch (packet.Type)
+                        peer.Send(bytes, deliveryMethod);
+                    }
+                    else
+                    {
+                        NetPeer? targetPeer = this._Players.FirstOrDefault(x => x.Key == packet.Target).Value;
+                        if (origin != null && targetPeer != null)
                         {
-                            case PacketType.Ping:
-                                if (packet.Target == "server") peer.Send(bytes, deliveryMethod);
-                                else
+                            if (packet.Key == "pong")
+                            {
+                                Packet pong = new()
                                 {
-                                    NetPeer? targetPeer = this._Players.FirstOrDefault(x => x.Key == packet.Target).Value;
-                                    if (origin != null && targetPeer != null)
-                                    {
-                                        if (packet.Key == "pong")
-                                        {
-                                            Packet pong = new()
-                                            {
-                                                Type = PacketType.Ping,
-                                                Target = packet.Target
-                                            };
-                                            targetPeer.Send(pong.Pack(), deliveryMethod);
-                                        }
-                                        else
-                                        {
-                                            Packet ping = new()
-                                            {
-                                                Type = PacketType.Ping,
-                                                Target = origin
-                                            };
-                                            targetPeer.Send(ping.Pack(), deliveryMethod);
-                                        }
-                                    }
-                                }
+                                    Type = PacketType.Ping,
+                                    Target = packet.Target
+                                };
+                                targetPeer.Send(pong.Pack(), deliveryMethod);
+                            }
+                            else
+                            {
+                                Packet ping = new()
+                                {
+                                    Type = PacketType.Ping,
+                                    Target = origin
+                                };
+                                targetPeer.Send(ping.Pack(), deliveryMethod);
+                            }
+                        }
+                    }
+                    break;
+                case PacketType.SetState:
+                    if (packet.Target.Length == 36)
+                    {
+                        if (packet.Target == origin)
+                        {
+                            this._States[origin + packet.Key] = packet.Data;
+                            this.SyncState(packet, bytes, deliveryMethod, peer);
+                        }
+                    }
+                    else
+                    {
+                        if (this.ReservedStates.Contains(packet.Key))
+                        {
+                            byte[] data = [];
+                            if (this._States.TryGetValue(packet.Key, out byte[]? value)) data = value;
+                            else this._States[packet.Key] = data;
+                            Packet response = new(PacketType.SetState, "FORBIDDEN", packet.Key, data);
+                            peer.Send(response.Pack(), DeliveryMethod.ReliableOrdered);
+                        }
+                        this._States[packet.Key] = packet.Data;
+                        this.SyncState(packet, bytes, deliveryMethod, peer);
+                    }
+                    break;
+                case PacketType.RPC:
+                    if (this.GetPeer(packet.Target) != null)
+                    {
+                        this.SendRPC(bytes, packet.Target, RpcMode.Target, deliveryMethod);
+                    }
+                    else
+                    {
+                        string peerId = this.GetPeerId(peer);
+                        switch (packet.Target)
+                        {
+                            case "self":
+                                this.SendRPC(bytes, peerId, RpcMode.Target, deliveryMethod);
                                 break;
-                            case PacketType.SetState:
-                                if (packet.Target.Length == 36)
-                                {
-                                    if (packet.Target == origin)
-                                    {
-                                        this._States[origin + packet.Key] = packet.Data;
-                                        this.SyncState(packet, bytes, deliveryMethod, peer);
-                                    }
-                                }
-                                else
-                                {
-                                    if (this.ReservedStates.Contains(packet.Key))
-                                    {
-                                        byte[] data = [];
-                                        if (this._States.TryGetValue(packet.Key, out byte[]? value)) data = value;
-                                        else this._States[packet.Key] = data;
-                                        Packet response = new(PacketType.SetState, "FORBIDDEN", packet.Key, data);
-                                        peer.Send(response.Pack(), DeliveryMethod.ReliableOrdered);
-                                    }
-                                    this._States[packet.Key] = packet.Data;
-                                    this.SyncState(packet, bytes, deliveryMethod, peer);
-                                }
+                            case "all":
+                                Packet allPacket = new(packet.Type, peerId, packet.Key, packet.Data);
+                                this.SendRPC(allPacket.Pack(), "", RpcMode.All, deliveryMethod);
                                 break;
-                            case PacketType.RPC:
-                                if (this.GetPeer(packet.Target) != null)
-                                {
-                                    this.SendRPC(bytes, packet.Target, RpcMode.Target, deliveryMethod);
-                                }
-                                else
-                                {
-                                    string peerId = this.GetPeerId(peer);
-                                    switch (packet.Target)
-                                    {
-                                        case "self":
-                                            this.SendRPC(bytes, peerId, RpcMode.Target, deliveryMethod);
-                                            break;
-                                        case "all":
-                                            Packet allPacket = new(packet.Type, peerId, packet.Key, packet.Data);
-                                            this.SendRPC(allPacket.Pack(), "", RpcMode.All, deliveryMethod);
-                                            break;
-                                        case "others":
-                                            Packet othersPacket = new(packet.Type, peerId, packet.Key, packet.Data);
-                                            this.SendRPC(othersPacket.Pack(), peerId, RpcMode.Others, deliveryMethod);
-                                            break;
-                                        case "server":
-                                            this.HandleRPC(packet.Key, packet.Data, peer);
-                                            break;
-                                        default:
-                                            break;
-                                    }
-                                }
+                            case "others":
+                                Packet othersPacket = new(packet.Type, peerId, packet.Key, packet.Data);
+                                this.SendRPC(othersPacket.Pack(), peerId, RpcMode.Others, deliveryMethod);
+                                break;
+                            case "server":
+                                this.HandleRPC(packet.Key, packet.Data, peer);
                                 break;
                             default:
                                 break;
                         }
                     }
-                }
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -492,17 +510,15 @@ namespace BetterTogetherCore
         /// Clears all global states except for the specified keys
         /// </summary>
         /// <param name="except">Keys to keep</param>
-        public void ClearAllGlobalStates(List<string> except)
+        public void ClearAllGlobalStates(IEnumerable<string> except)
         {
-
-            var globalStates = this._States.Where(x => !Utils.guidRegex.IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
+            var globalStates = this._States.Where(x => !PreCompiledRegex.GuidRegex().IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
             foreach (var state in globalStates)
             {
                 this._States.TryRemove(state.Key, out _);
             }
             Packet delete = new(PacketType.DeleteState, "global", "", MemoryPackSerializer.Serialize(except));
             this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
-
         }
 
         /// <summary>
@@ -522,7 +538,7 @@ namespace BetterTogetherCore
         /// </summary>
         /// <param name="player"></param>
         /// <param name="except">The keys to keep</param>
-        public void ClearSpecificPlayerStates(string player, List<string> except)
+        public void ClearSpecificPlayerStates(string player, IEnumerable<string> except)
         {
             foreach (var key in except)
             {
@@ -536,7 +552,7 @@ namespace BetterTogetherCore
         /// Clears all player states except for the specified keys
         /// </summary>
         /// <param name="except">The keys to keep</param>
-        public void ClearAllPlayerStates(List<string> except)
+        public void ClearAllPlayerStates(IEnumerable<string> except)
         {
             var playerStates = this._States.Where(x => StartsWithGuid(x.Key) && !except.Contains(x.Key[..36])).ToList();
             foreach (var state in playerStates)
@@ -674,7 +690,7 @@ namespace BetterTogetherCore
         public static bool IsGuid(string id)
         {
             if (id.Length != 36) return false;
-            return Utils.guidRegex.IsMatch(id);
+            return PreCompiledRegex.GuidRegex().IsMatch(id);
         }
 
         /// <summary>
@@ -685,7 +701,7 @@ namespace BetterTogetherCore
         public static bool StartsWithGuid(string id)
         {
             if (id.Length < 36) return false;
-            return Utils.guidRegex.IsMatch(id.AsSpan(0, 36));
+            return PreCompiledRegex.GuidRegex().IsMatch(id.AsSpan(0, 36));
         }
 
         /// <summary>

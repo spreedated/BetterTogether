@@ -5,6 +5,7 @@ using BetterTogetherCore.Models;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using MemoryPack;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -20,10 +21,8 @@ namespace BetterTogetherCore
     /// <summary>
     /// A BetterTogether client that connects to a BetterTogether server
     /// </summary>
-    public partial class BetterClient : IDisposable
+    public class BetterClient : IDisposable
     {
-        [GeneratedRegex(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", RegexOptions.Compiled)]
-        private partial Regex Regex1();
         private bool disposedValue;
         private CancellationTokenSource? _PollToken = null;
         private readonly Dictionary<string, byte[]> _InitStates = [];
@@ -31,6 +30,8 @@ namespace BetterTogetherCore
         private readonly Dictionary<string, ClientRpcAction> _RegisteredRPCs = [];
         private readonly Dictionary<string, Action<Packet>> _RegisteredEvents = [];
         private List<string> _Players = [];
+        private DateTime _Ping;
+        private readonly ILogger? _Logger;
 
         /// <summary>
         /// The id assigned to this client by the server
@@ -58,12 +59,15 @@ namespace BetterTogetherCore
         /// </summary>
         public EventBasedNetListener Listener { get; private set; } = new EventBasedNetListener();
 
+        public bool IsPolling { get; private set; }
+
         #region Constructor
         /// <summary>
         /// Creates a new BetterClient
         /// </summary>
-        public BetterClient()
+        public BetterClient(ILogger? logger = null)
         {
+            this._Logger = logger;
             this.Listener.NetworkReceiveEvent += this.Listener_NetworkReceiveEvent;
             this.Listener.PeerDisconnectedEvent += this.Listener_PeerDisconnectedEvent;
         }
@@ -110,13 +114,20 @@ namespace BetterTogetherCore
             return this;
         }
 
-        private void PollEvents()
+        private async Task PollEvents()
         {
             while (this.NetManager != null)
             {
-                if (this._PollToken?.IsCancellationRequested == true) return;
+                if (this._PollToken!.IsCancellationRequested)
+                {
+                    this.IsPolling = false;
+                    return;
+                }
+
+                this.IsPolling = true;
                 this.NetManager.PollEvents();
-                Thread.Sleep(this.PollInterval);
+
+                await Task.Delay(this.PollInterval);
             }
         }
 
@@ -128,22 +139,22 @@ namespace BetterTogetherCore
         /// <returns>True if the connection was successful</returns>
         public bool Connect(string host, int port = 9050)
         {
-            this.NetManager = new NetManager(this.Listener);
+            this.NetManager = new(this.Listener);
             try
             {
                 this.NetManager.Start();
                 ConnectionData connectionData = new("BetterTogether", this._InitStates);
                 NetDataWriter writer = new();
                 byte[] data = MemoryPackSerializer.Serialize(connectionData);
-                Console.WriteLine(data.Length);
+                this._Logger?.LogTrace("Data length \"{Length}\"", data.Length);
                 writer.Put(data);
                 IPEndPoint endPoint = new(IPAddress.Parse(host), port);
                 if (this.NetManager.Connect(endPoint, writer) != null)
                 {
-                    this._PollToken = new CancellationTokenSource();
-                    Thread thread = new(this.PollEvents);
-                    thread.Start();
-                    return true;
+                    this._PollToken = new();
+                    Task.Run(this.PollEvents);
+
+                    return this.IsPolling;
                 }
                 else return false;
             }
@@ -287,7 +298,7 @@ namespace BetterTogetherCore
 
         private void Listener_PeerDisconnectedEvent(NetPeer peer, DisconnectInfo disconnectInfo)
         {
-            Disconnected?.Invoke(disconnectInfo);
+            this.Disconnected?.Invoke(disconnectInfo);
         }
 
         /// <summary>
@@ -311,7 +322,7 @@ namespace BetterTogetherCore
         public void SetState(string key, byte[] data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
         {
             if (this.NetManager == null) return;
-            if (key.Length >= 36 && Utils.guidRegex.IsMatch(key)) return;
+            if (key.Length >= 36 && PreCompiledRegex.GuidRegex().IsMatch(key)) return;
             this._States[key] = data;
             Packet packet = new()
             {
@@ -342,7 +353,11 @@ namespace BetterTogetherCore
         /// <param name="method">The delivery method of LiteNetLib</param>
         public void SetPlayerState(string key, byte[] data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
         {
-            if (this.NetManager == null) return;
+            if (this.NetManager == null)
+            {
+                return;
+            }
+
             this._States[this.Id + key] = data;
             Packet packet = new()
             {
@@ -351,6 +366,7 @@ namespace BetterTogetherCore
                 Key = this.Id + key,
                 Data = data
             };
+
             this.NetManager.FirstPeer.Send(packet.Pack(), method);
         }
 
@@ -366,6 +382,7 @@ namespace BetterTogetherCore
             {
                 return MemoryPackSerializer.Deserialize<T>(value);
             }
+
             return default;
         }
 
@@ -383,6 +400,7 @@ namespace BetterTogetherCore
             {
                 return MemoryPackSerializer.Deserialize<T>(value);
             }
+
             return default;
         }
 
@@ -391,9 +409,9 @@ namespace BetterTogetherCore
             this._States.TryRemove(key, out _);
         }
 
-        private void ClearAllGlobalStates(List<string> except)
+        private void ClearAllGlobalStates(IEnumerable<string> except)
         {
-            var globalStates = this._States.Where(x => !Utils.guidRegex.IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
+            List<KeyValuePair<string, byte[]>> globalStates = this._States.Where(x => !PreCompiledRegex.GuidRegex().IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
             foreach (var state in globalStates)
             {
                 this._States.TryRemove(state.Key, out _);
@@ -405,7 +423,7 @@ namespace BetterTogetherCore
             this._States.TryRemove(player + key, out _);
         }
 
-        private void ClearSpecificPlayerStates(string player, List<string> except)
+        private void ClearSpecificPlayerStates(string player, IEnumerable<string> except)
         {
             foreach (var key in except)
             {
@@ -413,9 +431,9 @@ namespace BetterTogetherCore
             }
         }
 
-        private void ClearAllPlayerStates(List<string> except)
+        private void ClearAllPlayerStates(IEnumerable<string> except)
         {
-            var playerStates = this._States.Where(x => this.Regex1().IsMatch(x.Key) && !except.Contains(x.Key[..36])).ToList();
+            var playerStates = this._States.Where(x => PreCompiledRegex.GuidRegex().IsMatch(x.Key) && !except.Contains(x.Key[..36])).ToList();
             foreach (var state in playerStates)
             {
                 this._States.TryRemove(state.Key, out _);
@@ -558,7 +576,11 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RpcOthers(string method, byte[] args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
-            if (this.NetManager == null) return this;
+            if (this.NetManager == null)
+            {
+                return this;
+            }
+
             Packet packet = new()
             {
                 Type = PacketType.RPC,
@@ -567,6 +589,7 @@ namespace BetterTogetherCore
                 Data = args
             };
             this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
+
             return this;
         }
 
@@ -649,7 +672,6 @@ namespace BetterTogetherCore
             return this;
         }
 
-        private DateTime? _Ping = null;
         /// <summary>
         /// Pings the server and returns the delay. Only call once at a time
         /// </summary>
@@ -658,27 +680,32 @@ namespace BetterTogetherCore
         /// <returns>The delay as a <c>TimeSpan</c></returns>
         public async Task<TimeSpan> PingServer(int timeout = 2000, DeliveryMethod method = DeliveryMethod.Unreliable)
         {
-            if (this.NetManager == null) return TimeSpan.Zero;
+            if (this.NetManager == null)
+            {
+                return TimeSpan.Zero;
+            }
 
             Packet packet = new()
             {
                 Target = "server",
                 Type = PacketType.Ping
             };
+
             this.NetManager.FirstPeer.Send(packet.Pack(), method);
             DateTime now = DateTime.Now;
             TimeSpan delay = now - await Task.Run(() =>
             {
                 int i = 0;
-                while (_Ping == null && i < timeout)
+                while (_Ping == default && i < timeout)
                 {
                     Thread.Sleep(15);
                     i += 15;
                 }
-                if (_Ping == null) return now;
-                else return _Ping.Value;
+                if (_Ping == default) return now;
+                else return _Ping;
             });
-            _Ping = null;
+            _Ping = default;
+
             return delay;
         }
 
@@ -691,27 +718,32 @@ namespace BetterTogetherCore
         /// <returns>The delay as a <c>TimeSpan</c></returns>
         public async Task<TimeSpan> PingPlayer(string playerId, int timeout = 2000, DeliveryMethod method = DeliveryMethod.Unreliable)
         {
-            if (this.NetManager == null) return TimeSpan.Zero;
+            if (this.NetManager == null)
+            {
+                return TimeSpan.Zero;
+            }
 
             Packet packet = new()
             {
                 Target = playerId,
                 Type = PacketType.Ping
             };
+
             this.NetManager.FirstPeer.Send(packet.Pack(), method);
             DateTime now = DateTime.Now;
             TimeSpan delay = now - await Task.Run(() =>
             {
                 int i = 0;
-                while (_Ping == null && i < timeout)
+                while (_Ping == default && i < timeout)
                 {
                     Thread.Sleep(15);
                     i += 15;
                 }
-                if (_Ping == null) return now;
-                else return _Ping.Value;
+                if (_Ping == default) return now;
+                else return _Ping;
             });
-            _Ping = null;
+            _Ping = default;
+
             return delay;
         }
 

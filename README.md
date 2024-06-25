@@ -28,7 +28,7 @@ using BetterTogether;
 // Setup a server using the fluent API
 BetterServer server = new BetterServer()
     .WithMaxPlayers(2)
-    .WithAdminPlayers(true) // Allow the server to have admins
+    .WithAdminPlayers() // Allow the server to have admins
     .Start(9050);
 
 // Seting up a client without the fluent API
