@@ -79,7 +79,7 @@ namespace BetterTogetherCore
         /// Deletes the specified state
         /// </summary>
         /// <param name="key">The key of the state</param>
-        /// <returns>This object
+        /// <returns>This object</returns>
         public readonly ConnectionData DeleteState(string key)
         {
             InitStates.Remove(key);
