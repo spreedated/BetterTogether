@@ -1,7 +1,5 @@
 ﻿using MemoryPack;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace BetterTogetherCore
 {
@@ -47,7 +45,7 @@ namespace BetterTogetherCore
         }
         /// <summary>
         /// Create a new packet with the specified data type. MemoryPack can't serialize <c>object</c> so generics are used.
-         /// </summary>
+        /// </summary>
         /// <param name="type">The packet type</param>
         /// <param name="target">The target of the packet</param>
         /// <param name="key">The key of the packet</param>
@@ -63,7 +61,7 @@ namespace BetterTogetherCore
         /// <returns>The deserialized object or <c>null</c></returns>
         public T? GetData<T>()
         {
-            if(Data.Length == 0) return default(T?); // Return null if the data is empty (no data to deserialize
+            if (Data.Length == 0) return default(T?); // Return null if the data is empty (no data to deserialize
             return MemoryPackSerializer.Deserialize<T>(Data);
         }
         /// <summary>

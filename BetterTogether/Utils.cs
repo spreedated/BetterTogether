@@ -1,7 +1,5 @@
 ﻿using MemoryPack;
-using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace BetterTogetherCore
@@ -43,7 +41,7 @@ namespace BetterTogetherCore
         /// <summary>
         /// Constructor 
         /// </summary>
-        public ConnectionData() {}
+        public ConnectionData() { }
         /// <summary>
         /// Constructor with key
         /// </summary>

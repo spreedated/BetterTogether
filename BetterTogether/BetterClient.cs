@@ -101,7 +101,7 @@ namespace BetterTogetherCore
                 Console.WriteLine(data.Length);
                 writer.Put(data);
                 IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse(host), port);
-                if(NetManager.Connect(endPoint, writer) != null)
+                if (NetManager.Connect(endPoint, writer) != null)
                 {
                     _PollToken = new CancellationTokenSource();
                     Thread thread = new Thread(PollEvents);
@@ -142,12 +142,12 @@ namespace BetterTogetherCore
                 switch (packet.Type)
                 {
                     case PacketType.Ping:
-                        if(packet.Target == "server") _Ping = DateTime.Now;
-                        else if(packet.Target == Id)
+                        if (packet.Target == "server") _Ping = DateTime.Now;
+                        else if (packet.Target == Id)
                         {
                             _Ping = DateTime.Now;
                         }
-                        else if(packet.Target != "server")
+                        else if (packet.Target != "server")
                         {
                             Packet pong = new Packet();
                             pong.Type = PacketType.Ping;
@@ -157,7 +157,7 @@ namespace BetterTogetherCore
                         }
                         break;
                     case PacketType.SetState:
-                        if(packet.Target == "FORBIDEN")
+                        if (packet.Target == "FORBIDEN")
                         {
                             _States[packet.Key] = packet.Data;
                         }
@@ -169,38 +169,38 @@ namespace BetterTogetherCore
                         break;
                     case PacketType.Init:
                         var states = packet.GetData<ConcurrentDictionary<string, byte[]>>();
-                        if(states != null) _States = states;
+                        if (states != null) _States = states;
                         break;
                     case PacketType.RPC:
                         HandleRPC(packet.Key, packet.Target, packet.Data);
                         break;
                     case PacketType.DeleteState:
                         List<string>? except = packet.GetData<List<string>>();
-                        if(packet.Target.Length == 36 && Players.Contains(packet.Target))
+                        if (packet.Target.Length == 36 && Players.Contains(packet.Target))
                         {
-                            if(packet.Key != "")
+                            if (packet.Key != "")
                             {
                                 DeletePlayerState(packet.Target, packet.Key);
                             }
-                            else if(except != null)
+                            else if (except != null)
                             {
                                 ClearSpecificPlayerStates(packet.Target, except);
                             }
                         }
-                        else if(packet.Target == "players")
+                        else if (packet.Target == "players")
                         {
-                            if(except != null)
+                            if (except != null)
                             {
                                 ClearAllPlayerStates(except);
                             }
                         }
-                        else if(packet.Target == "global")
+                        else if (packet.Target == "global")
                         {
-                            if(packet.Key != "")
+                            if (packet.Key != "")
                             {
                                 DeleteState(packet.Key);
                             }
-                            if(except != null)
+                            if (except != null)
                             {
                                 ClearAllGlobalStates(except);
                             }
@@ -242,7 +242,7 @@ namespace BetterTogetherCore
         {
             Disconnected?.Invoke(disconnectInfo);
         }
-        
+
         /// <summary>
         /// Sends a state object to the server
         /// </summary>
@@ -251,8 +251,8 @@ namespace BetterTogetherCore
         /// <param name="method">The delivery method of LiteNetLib</param>
         public void SetState(string key, byte[] data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
         {
-            if(NetManager == null) return;
-            if(key.Length >= 36 && Utils.guidRegex.IsMatch(key)) return;
+            if (NetManager == null) return;
+            if (key.Length >= 36 && Utils.guidRegex.IsMatch(key)) return;
             _States[key] = data;
             Packet packet = new Packet
             {
@@ -262,7 +262,7 @@ namespace BetterTogetherCore
             };
             NetManager.FirstPeer.Send(packet.Pack(), method);
         }
-        
+
         /// <summary>
         /// Sends a state object to the server. This state object is owned by the player and only this client or the server can modify it
         /// </summary>
@@ -282,7 +282,7 @@ namespace BetterTogetherCore
             };
             NetManager.FirstPeer.Send(packet.Pack(), method);
         }
-        
+
         /// <summary>
         /// Sends a state object to the server
         /// </summary>
@@ -294,7 +294,7 @@ namespace BetterTogetherCore
         {
             SetState(key, MemoryPackSerializer.Serialize(data), method);
         }
-        
+
         /// <summary>
         /// Sends a state object to the server. This state object is owned by the player and only this client or the server can modify it
         /// </summary>
@@ -306,7 +306,7 @@ namespace BetterTogetherCore
         {
             SetPlayerState(key, MemoryPackSerializer.Serialize(data), method);
         }
-        
+
         /// <summary>
         /// Gets the latest state of a key available on this client
         /// </summary>
@@ -385,12 +385,12 @@ namespace BetterTogetherCore
         }
         private void HandleRPC(string method, string player, byte[] args)
         {
-            if(RegisteredRPCs.ContainsKey(method))
+            if (RegisteredRPCs.ContainsKey(method))
             {
                 RegisteredRPCs[method](player, args);
             }
         }
-        
+
         /// <summary>
         /// Sends a Remote Procedure Call to the server then back to this client
         /// </summary>
@@ -617,7 +617,7 @@ namespace BetterTogetherCore
                     Thread.Sleep(15);
                     i += 15;
                 }
-                if(_Ping == null) return now;
+                if (_Ping == null) return now;
                 else return _Ping.Value;
             });
             _Ping = null;
