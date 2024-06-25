@@ -41,27 +41,31 @@ namespace BetterTogetherCore
         /// <summary>
         /// The reserved states for the server. Only the server (and admins if setup correctly) can modify these states
         /// </summary>
-        public List<string> ReservedStates { get; private set; } = new List<string>();
+        public List<string> ReservedStates { get; private set; } = [];
         /// <summary>
         /// Returns a read-only dictionary of the states on the server
         /// </summary>
-        public ReadOnlyDictionary<string, byte[]> States => new ReadOnlyDictionary<string, byte[]>(_States);
-        private Dictionary<string, ServerRpcAction> RegisteredRPCs { get; set; } = new Dictionary<string, ServerRpcAction>();
+        public ReadOnlyDictionary<string, byte[]> States => new(this._States);
+        private Dictionary<string, ServerRpcAction> RegisteredRPCs { get; set; } = [];
         private ConcurrentDictionary<string, NetPeer> _Players { get; set; } = new();
         private ConcurrentDictionary<string, bool> _Admins { get; set; } = new();
-        private List<string> _Banned { get; set; } = new();
+        private List<string> _Banned { get; set; } = [];
         /// <summary>
         /// Returns a read-only dictionary of the players on the server
         /// </summary>
-        public ReadOnlyDictionary<string, NetPeer> Players => new ReadOnlyDictionary<string, NetPeer>(_Players);
+        public ReadOnlyDictionary<string, NetPeer> Players => new(this._Players);
         /// <summary>
         /// Returns a list of all the players that are admins
         /// </summary>
-        public List<string> Admins => _Admins.Keys.ToList();
+        public List<string> GetAdminList()
+        {
+            return [.. this._Admins.Keys];
+        }
+
         /// <summary>
         /// Returns a list of all the banned IP addresses
         /// </summary>
-        public List<string> Banned => _Banned;
+        public List<string> Banned => this._Banned;
 
 
 
@@ -70,10 +74,10 @@ namespace BetterTogetherCore
         /// </summary>
         public BetterServer()
         {
-            Listener.ConnectionRequestEvent += Listener_ConnectionRequestEvent;
-            Listener.PeerConnectedEvent += Listener_PeerConnectedEvent;
-            Listener.NetworkReceiveEvent += Listener_NetworkReceiveEvent;
-            Listener.PeerDisconnectedEvent += Listener_PeerDisconnectedEvent;
+            this.Listener.ConnectionRequestEvent += this.Listener_ConnectionRequestEvent;
+            this.Listener.PeerConnectedEvent += this.Listener_PeerConnectedEvent;
+            this.Listener.NetworkReceiveEvent += this.Listener_NetworkReceiveEvent;
+            this.Listener.PeerDisconnectedEvent += this.Listener_PeerDisconnectedEvent;
         }
         /// <summary>
         /// Sets the interval between polling events. Default is 15ms
@@ -82,7 +86,7 @@ namespace BetterTogetherCore
         /// <returns>This server</returns>
         public BetterServer WithPollInterval(int interval)
         {
-            PollInterval = interval;
+            this.PollInterval = interval;
             return this;
         }
         /// <summary>
@@ -92,7 +96,7 @@ namespace BetterTogetherCore
         /// <returns>This server</returns>
         public BetterServer WithMaxPlayers(int maxPlayers)
         {
-            MaxPlayers = maxPlayers;
+            this.MaxPlayers = maxPlayers;
             return this;
         }
         /// <summary>
@@ -102,7 +106,7 @@ namespace BetterTogetherCore
         /// <returns>This server</returns>
         public BetterServer WithAdminUsers(bool allowAdminUsers)
         {
-            AllowAdminUsers = allowAdminUsers;
+            this.AllowAdminUsers = allowAdminUsers;
             return this;
         }
         /// <summary>
@@ -112,7 +116,7 @@ namespace BetterTogetherCore
         /// <returns>This server</returns>
         public BetterServer WithBannedUsers(List<string> addresses)
         {
-            _Banned = new List<string>(addresses);
+            this._Banned = new List<string>(addresses);
             return this;
         }
         /// <summary>
@@ -122,15 +126,15 @@ namespace BetterTogetherCore
         /// <returns></returns>
         public BetterServer WithReservedStates(List<string> states)
         {
-            ReservedStates = new List<string>(states);
+            this.ReservedStates = new List<string>(states);
             return this;
         }
         private void PollEvents()
         {
             while (true)
             {
-                if (_PollToken?.IsCancellationRequested == true) break;
-                NetManager?.PollEvents();
+                if (this._PollToken?.IsCancellationRequested == true) break;
+                this.NetManager?.PollEvents();
                 Thread.Sleep(15);
             }
         }
@@ -141,26 +145,26 @@ namespace BetterTogetherCore
         /// <returns><c>true</c> if the server started successfully, <c>false</c> otherwise</returns>
         public bool Start(int port = 9050)
         {
-            NetManager = new NetManager(Listener);
+            this.NetManager = new NetManager(this.Listener);
             try
             {
-                if (NetManager.Start(port))
+                if (this.NetManager.Start(port))
                 {
-                    _PollToken = new CancellationTokenSource();
-                    Thread thread = new Thread(PollEvents);
+                    this._PollToken = new CancellationTokenSource();
+                    Thread thread = new(this.PollEvents);
                     thread.Start();
                     return true;
                 }
                 else
                 {
-                    NetManager = null;
+                    this.NetManager = null;
                     return false;
                 }
             }
             catch
             {
-                NetManager?.Stop();
-                NetManager = null;
+                this.NetManager?.Stop();
+                this.NetManager = null;
                 return false;
             }
         }
@@ -170,13 +174,13 @@ namespace BetterTogetherCore
         /// </summary>
         public BetterServer Stop()
         {
-            _PollToken?.Cancel();
-            if (NetManager == null) return this;
-            _Players.Clear();
-            _Admins.Clear();
-            _States.Clear();
-            NetManager?.Stop();
-            NetManager = null;
+            this._PollToken?.Cancel();
+            if (this.NetManager == null) return this;
+            this._Players.Clear();
+            this._Admins.Clear();
+            this._States.Clear();
+            this.NetManager?.Stop();
+            this.NetManager = null;
             return this;
         }
 
@@ -187,10 +191,10 @@ namespace BetterTogetherCore
         /// <param name="reason">The kick reason</param>
         public void Kick(string id, string reason)
         {
-            if (_Players.ContainsKey(id))
+            if (this._Players.TryGetValue(id, out NetPeer? value))
             {
-                NetPeer peer = _Players[id];
-                Packet packet = new Packet(PacketType.Kick, "", "Kicked", Encoding.UTF8.GetBytes(reason));
+                NetPeer peer = value;
+                Packet packet = new(PacketType.Kick, "", "Kicked", Encoding.UTF8.GetBytes(reason));
                 peer.Send(packet.Pack(), DeliveryMethod.ReliableOrdered);
                 peer.Disconnect(Encoding.UTF8.GetBytes("Kicked: " + reason));
             }
@@ -202,11 +206,11 @@ namespace BetterTogetherCore
         /// <param name="reason">The ban reason</param>
         public void IPBan(string id, string reason)
         {
-            if (_Players.ContainsKey(id))
+            if (this._Players.TryGetValue(id, out NetPeer? value))
             {
-                NetPeer peer = _Players[id];
-                Packet packet = new Packet(PacketType.Ban, "", "Banned", Encoding.UTF8.GetBytes(reason));
-                _Banned.Add(peer.Address.ToString().Split(':')[0]);
+                NetPeer peer = value;
+                Packet packet = new(PacketType.Ban, "", "Banned", Encoding.UTF8.GetBytes(reason));
+                this._Banned.Add(peer.Address.ToString().Split(':')[0]);
                 peer.Send(packet.Pack(), DeliveryMethod.ReliableOrdered);
                 peer.Disconnect(Encoding.UTF8.GetBytes("Banned: " + reason));
             }
@@ -218,14 +222,14 @@ namespace BetterTogetherCore
             byte[] bytes = request.Data.RawData[request.Data.UserDataOffset..(request.Data.UserDataOffset + request.Data.UserDataSize)];
             ConnectionData? data = MemoryPackSerializer.Deserialize<ConnectionData>(bytes);
             if (data == null) return;
-            if (_Players.Count == MaxPlayers)
+            if (this._Players.Count == this.MaxPlayers)
             {
                 string reason = "Server is full";
                 request.Reject(Encoding.UTF8.GetBytes(reason));
                 return;
             }
             string ip = request.RemoteEndPoint.Address.ToString();
-            if (_Banned.Contains(ip))
+            if (this._Banned.Contains(ip))
             {
                 string reason = "You are banned from this server";
                 request.Reject(Encoding.UTF8.GetBytes(reason));
@@ -236,15 +240,15 @@ namespace BetterTogetherCore
                 request.Accept();
                 foreach (var state in data.Value.InitStates)
                 {
-                    if (ReservedStates.Contains(state.Key)) continue;
+                    if (this.ReservedStates.Contains(state.Key)) continue;
                     if (state.Key.FastStartsWith("[player]"))
                     {
                         string ipPort = request.RemoteEndPoint.ToString();
-                        if (!_PlayerStatesToSet.ContainsKey(ipPort)) _PlayerStatesToSet[ipPort] = new Dictionary<string, byte[]>();
-                        if (_PlayerStatesToSet[ipPort].ContainsKey(state.Key)) _PlayerStatesToSet[ipPort][state.Key] = state.Value;
-                        _PlayerStatesToSet[ipPort][state.Key.Replace("[player]", "")] = state.Value;
+                        if (!this._PlayerStatesToSet.ContainsKey(ipPort)) this._PlayerStatesToSet[ipPort] = [];
+                        if (this._PlayerStatesToSet[ipPort].ContainsKey(state.Key)) this._PlayerStatesToSet[ipPort][state.Key] = state.Value;
+                        this._PlayerStatesToSet[ipPort][state.Key.Replace("[player]", "")] = state.Value;
                     }
-                    else _States[state.Key] = state.Value;
+                    else this._States[state.Key] = state.Value;
                 }
             }
             else
@@ -256,44 +260,44 @@ namespace BetterTogetherCore
         private void Listener_PeerConnectedEvent(NetPeer peer)
         {
             string id = Guid.NewGuid().ToString();
-            while (_Players.ContainsKey(id))
+            while (this._Players.ContainsKey(id))
             {
                 id = Guid.NewGuid().ToString();
             }
-            if (AllowAdminUsers && _Players.Count == 0)
+            if (this.AllowAdminUsers && this._Players.IsEmpty)
             {
-                _Admins[id] = true;
+                this._Admins[id] = true;
             }
             string ipPort = peer.Address.ToString() + ":" + peer.Port;
-            if (_PlayerStatesToSet.ContainsKey(ipPort))
+            if (this._PlayerStatesToSet.TryGetValue(ipPort, out Dictionary<string, byte[]>? value))
             {
-                foreach (var state in _PlayerStatesToSet[ipPort])
+                foreach (var state in value)
                 {
-                    _States[id + state.Key] = state.Value;
+                    this._States[id + state.Key] = state.Value;
                 }
-                _PlayerStatesToSet.TryRemove(ipPort, out _);
+                this._PlayerStatesToSet.TryRemove(ipPort, out _);
             }
-            List<string> players = [id, .. _Players.Keys];
-            Packet packet1 = new Packet(PacketType.PeerConnected, "", "Connected", Encoding.UTF8.GetBytes(id));
-            SendAll(packet1.Pack(), DeliveryMethod.ReliableOrdered, peer);
-            _Players[id] = peer;
+            List<string> players = [id, .. this._Players.Keys];
+            Packet packet1 = new(PacketType.PeerConnected, "", "Connected", Encoding.UTF8.GetBytes(id));
+            this.SendAll(packet1.Pack(), DeliveryMethod.ReliableOrdered, peer);
+            this._Players[id] = peer;
             byte[] data = MemoryPackSerializer.Serialize(players);
-            Packet packet2 = new Packet(PacketType.SelfConnected, "", "Connected", data);
+            Packet packet2 = new(PacketType.SelfConnected, "", "Connected", data);
             peer.Send(packet2.Pack(), DeliveryMethod.ReliableOrdered);
-            byte[] states = MemoryPackSerializer.Serialize(_States);
-            Packet packet3 = new Packet(PacketType.Init, "", "Init", states);
+            byte[] states = MemoryPackSerializer.Serialize(this._States);
+            Packet packet3 = new(PacketType.Init, "", "Init", states);
             peer.Send(packet3.Pack(), DeliveryMethod.ReliableOrdered);
         }
         private void Listener_NetworkReceiveEvent(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
         {
             if (reader.AvailableBytes > 0)
             {
-                string origin = GetPeerId(peer);
+                string origin = this.GetPeerId(peer);
                 byte[] bytes = reader.GetRemainingBytes();
                 Packet? packet = MemoryPackSerializer.Deserialize<Packet>(bytes);
                 if (packet != null)
                 {
-                    if (DataReceived != null) packet = DataReceived(peer, packet.Value);
+                    if (this.DataReceived != null) packet = this.DataReceived(peer, packet.Value);
                     if (packet != null)
                     {
                         switch (packet.Value.Type)
@@ -302,21 +306,25 @@ namespace BetterTogetherCore
                                 if (packet.Value.Target == "server") peer.Send(bytes, deliveryMethod);
                                 else
                                 {
-                                    NetPeer? targetPeer = _Players.FirstOrDefault(x => x.Key == packet.Value.Target).Value;
+                                    NetPeer? targetPeer = this._Players.FirstOrDefault(x => x.Key == packet.Value.Target).Value;
                                     if (origin != null && targetPeer != null)
                                     {
                                         if (packet.Value.Key == "pong")
                                         {
-                                            Packet pong = new Packet();
-                                            pong.Type = PacketType.Ping;
-                                            pong.Target = packet.Value.Target;
+                                            Packet pong = new()
+                                            {
+                                                Type = PacketType.Ping,
+                                                Target = packet.Value.Target
+                                            };
                                             targetPeer.Send(pong.Pack(), deliveryMethod);
                                         }
                                         else
                                         {
-                                            Packet ping = new Packet();
-                                            ping.Type = PacketType.Ping;
-                                            ping.Target = origin;
+                                            Packet ping = new()
+                                            {
+                                                Type = PacketType.Ping,
+                                                Target = origin
+                                            };
                                             targetPeer.Send(ping.Pack(), deliveryMethod);
                                         }
                                     }
@@ -327,47 +335,47 @@ namespace BetterTogetherCore
                                 {
                                     if (packet.Value.Target == origin)
                                     {
-                                        _States[origin + packet.Value.Key] = packet.Value.Data;
-                                        SyncState(packet.Value, bytes, deliveryMethod, peer);
+                                        this._States[origin + packet.Value.Key] = packet.Value.Data;
+                                        this.SyncState(packet.Value, bytes, deliveryMethod, peer);
                                     }
                                 }
                                 else
                                 {
-                                    if (ReservedStates.Contains(packet.Value.Key))
+                                    if (this.ReservedStates.Contains(packet.Value.Key))
                                     {
                                         byte[] data = [];
-                                        if (_States.ContainsKey(packet.Value.Key)) data = _States[packet.Value.Key];
-                                        else _States[packet.Value.Key] = data;
-                                        Packet response = new Packet(PacketType.SetState, "FORBIDDEN", packet.Value.Key, data);
+                                        if (this._States.TryGetValue(packet.Value.Key, out byte[]? value)) data = value;
+                                        else this._States[packet.Value.Key] = data;
+                                        Packet response = new(PacketType.SetState, "FORBIDDEN", packet.Value.Key, data);
                                         peer.Send(response.Pack(), DeliveryMethod.ReliableOrdered);
                                     }
-                                    _States[packet.Value.Key] = packet.Value.Data;
-                                    SyncState(packet.Value, bytes, deliveryMethod, peer);
+                                    this._States[packet.Value.Key] = packet.Value.Data;
+                                    this.SyncState(packet.Value, bytes, deliveryMethod, peer);
                                 }
                                 break;
                             case PacketType.RPC:
-                                if (GetPeer(packet.Value.Target) != null)
+                                if (this.GetPeer(packet.Value.Target) != null)
                                 {
-                                    SendRPC(bytes, packet.Value.Target, RpcMode.Target, deliveryMethod);
+                                    this.SendRPC(bytes, packet.Value.Target, RpcMode.Target, deliveryMethod);
                                 }
                                 else
                                 {
-                                    string peerId = GetPeerId(peer);
+                                    string peerId = this.GetPeerId(peer);
                                     switch (packet.Value.Target)
                                     {
                                         case "self":
-                                            SendRPC(bytes, peerId, RpcMode.Target, deliveryMethod);
+                                            this.SendRPC(bytes, peerId, RpcMode.Target, deliveryMethod);
                                             break;
                                         case "all":
-                                            Packet allPacket = new Packet(packet.Value.Type, peerId, packet.Value.Key, packet.Value.Data);
-                                            SendRPC(allPacket.Pack(), "", RpcMode.All, deliveryMethod);
+                                            Packet allPacket = new(packet.Value.Type, peerId, packet.Value.Key, packet.Value.Data);
+                                            this.SendRPC(allPacket.Pack(), "", RpcMode.All, deliveryMethod);
                                             break;
                                         case "others":
-                                            Packet othersPacket = new Packet(packet.Value.Type, peerId, packet.Value.Key, packet.Value.Data);
-                                            SendRPC(othersPacket.Pack(), peerId, RpcMode.Others, deliveryMethod);
+                                            Packet othersPacket = new(packet.Value.Type, peerId, packet.Value.Key, packet.Value.Data);
+                                            this.SendRPC(othersPacket.Pack(), peerId, RpcMode.Others, deliveryMethod);
                                             break;
                                         case "server":
-                                            HandleRPC(packet.Value.Key, packet.Value.Data, peer);
+                                            this.HandleRPC(packet.Value.Key, packet.Value.Data, peer);
                                             break;
                                         default:
                                             break;
@@ -383,10 +391,10 @@ namespace BetterTogetherCore
         }
         private void Listener_PeerDisconnectedEvent(NetPeer peer, DisconnectInfo info)
         {
-            string disconnectedId = GetPeerId(peer);
-            _Admins.TryRemove(disconnectedId, out _);
-            Packet packet = new Packet(PacketType.PeerDisconnected, "", "Disconnected", Encoding.UTF8.GetBytes(disconnectedId));
-            SendAll(packet.Pack(), DeliveryMethod.ReliableOrdered, peer);
+            string disconnectedId = this.GetPeerId(peer);
+            this._Admins.TryRemove(disconnectedId, out _);
+            Packet packet = new(PacketType.PeerDisconnected, "", "Disconnected", Encoding.UTF8.GetBytes(disconnectedId));
+            this.SendAll(packet.Pack(), DeliveryMethod.ReliableOrdered, peer);
         }
         /// <summary>
         /// Syncs the state to all connected peers
@@ -397,17 +405,17 @@ namespace BetterTogetherCore
         /// <param name="origin">The peer from which the state originated from</param>
         private void SyncState(Packet packet, byte[] rawPacket, DeliveryMethod method = DeliveryMethod.ReliableUnordered, NetPeer? origin = null)
         {
-            if (NetManager == null) return;
+            if (this.NetManager == null) return;
             if (origin == null)
             {
-                foreach (NetPeer peer in NetManager.ConnectedPeerList)
+                foreach (NetPeer peer in this.NetManager.ConnectedPeerList)
                 {
                     peer.Send(rawPacket, method);
                 }
             }
             else
             {
-                foreach (NetPeer peer in NetManager.ConnectedPeerList)
+                foreach (NetPeer peer in this.NetManager.ConnectedPeerList)
                 {
                     if (peer != origin)
                     {
@@ -422,10 +430,10 @@ namespace BetterTogetherCore
         /// <param name="key">The key to delete</param>
         public void DeleteState(string key)
         {
-            if (key.Length == 36 && _States.ContainsKey(key.Substring(0, 36))) return;
-            _States.TryRemove(key, out _);
-            Packet delete = new Packet(PacketType.DeleteState, "global", key, [0]);
-            SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
+            if (key.Length == 36 && this._States.ContainsKey(key[..36])) return;
+            this._States.TryRemove(key, out _);
+            Packet delete = new(PacketType.DeleteState, "global", key, [0]);
+            this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
         /// <summary>
         /// Clears all global states except for the specified keys
@@ -434,13 +442,13 @@ namespace BetterTogetherCore
         public void ClearAllGlobalStates(List<string> except)
         {
 
-            var globalStates = _States.Where(x => !Utils.guidRegex.IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
+            var globalStates = this._States.Where(x => !Utils.guidRegex.IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
             foreach (var state in globalStates)
             {
-                _States.TryRemove(state.Key, out _);
+                this._States.TryRemove(state.Key, out _);
             }
-            Packet delete = new Packet(PacketType.DeleteState, "global", "", MemoryPackSerializer.Serialize(except));
-            SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
+            Packet delete = new(PacketType.DeleteState, "global", "", MemoryPackSerializer.Serialize(except));
+            this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
 
         }
         /// <summary>
@@ -450,9 +458,9 @@ namespace BetterTogetherCore
         /// <param name="key">The key to delete</param>
         public void DeletePlayerState(string player, string key)
         {
-            _States.TryRemove(player + key, out _);
-            Packet delete = new Packet(PacketType.DeleteState, player, key, [0]);
-            SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
+            this._States.TryRemove(player + key, out _);
+            Packet delete = new(PacketType.DeleteState, player, key, [0]);
+            this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
         /// <summary>
         /// Clears all player states for the specific player except for the specified keys
@@ -463,10 +471,10 @@ namespace BetterTogetherCore
         {
             foreach (var key in except)
             {
-                _States.TryRemove(player + key, out _);
+                this._States.TryRemove(player + key, out _);
             }
-            Packet delete = new Packet(PacketType.DeleteState, player, "", MemoryPackSerializer.Serialize(except));
-            SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
+            Packet delete = new(PacketType.DeleteState, player, "", MemoryPackSerializer.Serialize(except));
+            this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
         /// <summary>
         /// Clears all player states except for the specified keys
@@ -474,30 +482,30 @@ namespace BetterTogetherCore
         /// <param name="except">The keys to keep</param>
         public void ClearAllPlayerStates(List<string> except)
         {
-            var playerStates = _States.Where(x => StartsWithGuid(x.Key) && !except.Contains(x.Key.Substring(0, 36))).ToList();
+            var playerStates = this._States.Where(x => StartsWithGuid(x.Key) && !except.Contains(x.Key[..36])).ToList();
             foreach (var state in playerStates)
             {
-                _States.TryRemove(state.Key, out _);
+                this._States.TryRemove(state.Key, out _);
             }
-            Packet delete = new Packet(PacketType.DeleteState, "players", "", MemoryPackSerializer.Serialize(except));
-            SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
+            Packet delete = new(PacketType.DeleteState, "players", "", MemoryPackSerializer.Serialize(except));
+            this.SendAll(delete.Pack(), DeliveryMethod.ReliableUnordered);
         }
         private void SendRPC(byte[] rawPacket, string target, RpcMode mode, DeliveryMethod method)
         {
-            NetPeer? targetPeer = GetPeer(target);
+            NetPeer? targetPeer = this.GetPeer(target);
             switch (mode)
             {
                 case RpcMode.Target:
-                    if (targetPeer != null) targetPeer.Send(rawPacket, method);
+                    targetPeer?.Send(rawPacket, method);
                     break;
                 case RpcMode.Others:
-                    SendAll(rawPacket, method, targetPeer);
+                    this.SendAll(rawPacket, method, targetPeer);
                     break;
                 case RpcMode.All:
-                    SendAll(rawPacket, method);
+                    this.SendAll(rawPacket, method);
                     break;
                 case RpcMode.Host:
-                    if (targetPeer != null) targetPeer.Send(rawPacket, method);
+                    targetPeer?.Send(rawPacket, method);
                     break;
             }
         }
@@ -509,7 +517,7 @@ namespace BetterTogetherCore
         /// <returns>This server</returns>
         public BetterServer RegisterRPC(string method, ServerRpcAction action)
         {
-            RegisteredRPCs[method] = action;
+            this.RegisteredRPCs[method] = action;
             return this;
         }
         /// <summary>
@@ -520,9 +528,9 @@ namespace BetterTogetherCore
         public delegate void ServerRpcAction(NetPeer? peer, byte[] args);
         private void HandleRPC(string method, byte[] args, NetPeer? peer = null)
         {
-            if (RegisteredRPCs.ContainsKey(method))
+            if (this.RegisteredRPCs.TryGetValue(method, out ServerRpcAction? value))
             {
-                RegisteredRPCs[method](peer, args);
+                value(peer, args);
             }
         }
         /// <summary>
@@ -532,7 +540,7 @@ namespace BetterTogetherCore
         /// <param name="args">The arguments. Must be MemoryPackable</param>
         public void RpcSelf(string method, byte[] args)
         {
-            HandleRPC(method, args);
+            this.HandleRPC(method, args);
         }
         /// <summary>
         /// Calls a registered RPC on this server
@@ -543,13 +551,13 @@ namespace BetterTogetherCore
         public void RpcSelf<T>(string method, T args)
         {
             byte[] bytes = MemoryPackSerializer.Serialize(args);
-            HandleRPC(method, bytes);
+            this.HandleRPC(method, bytes);
         }
 
         /// <summary>
         /// This function will be called when a packet is received. Return <c>null</c> to ignore the packet.
         /// </summary>
-        public Func<NetPeer, Packet, Packet?>? DataReceived;
+        public Func<NetPeer, Packet, Packet?>? DataReceived { get; private set; }
         /// <summary>
         /// Fluent version of <c>DataReceived</c>
         /// </summary>
@@ -557,7 +565,7 @@ namespace BetterTogetherCore
         /// <returns>This server</returns>
         public BetterServer OnDataReceived(Func<NetPeer, Packet, Packet?> func)
         {
-            DataReceived = func;
+            this.DataReceived = func;
             return this;
         }
 
@@ -571,14 +579,12 @@ namespace BetterTogetherCore
         /// <param name="except">The peer to exclude</param>
         public void SendAll(byte[] data, DeliveryMethod method, NetPeer? except = null)
         {
-            foreach (var player in _Players)
+            foreach (var player in this._Players.Where(player => player.Value != except))
             {
-                if (player.Value != except)
-                {
-                    player.Value.Send(data, method);
-                }
+                player.Value.Send(data, method);
             }
         }
+
         /// <summary>
         /// Gets the peer id from the peer
         /// </summary>
@@ -586,7 +592,7 @@ namespace BetterTogetherCore
         /// <returns>The id of the peer, or <c>String.Empty</c></returns>
         public string GetPeerId(NetPeer peer)
         {
-            return _Players.FirstOrDefault(x => x.Value == peer).Key ?? string.Empty;
+            return this._Players.FirstOrDefault(x => x.Value == peer).Key ?? string.Empty;
         }
         /// <summary>
         /// Attempts to get a peer by id
@@ -595,7 +601,7 @@ namespace BetterTogetherCore
         /// <returns>A <c>NetPeer</c> or <c>null</c> if not found</returns>
         public NetPeer? GetPeer(string id)
         {
-            return _Players.FirstOrDefault(x => x.Key == id).Value;
+            return this._Players.FirstOrDefault(x => x.Key == id).Value;
         }
         /// <summary>
         /// Checks if a string is a valid GUID
@@ -615,7 +621,7 @@ namespace BetterTogetherCore
         public static bool StartsWithGuid(string id)
         {
             if (id.Length < 36) return false;
-            return Utils.guidRegex.IsMatch(id.Substring(0, 36));
+            return Utils.guidRegex.IsMatch(id.AsSpan(0, 36));
         }
         /// <summary>
         /// Checks if a player is an admin
@@ -624,7 +630,7 @@ namespace BetterTogetherCore
         /// <returns><c>true</c> if the player is an admin, <c>false</c> otherwise</returns>
         public bool IsAdmin(string id)
         {
-            return _Admins.ContainsKey(id);
+            return this._Admins.ContainsKey(id);
         }
     }
 }

@@ -27,11 +27,11 @@ namespace BetterTogetherCore
         /// The delay between polling events in milliseconds. Default is 15ms
         /// </summary>
         public int PollInterval { get; private set; } = 15;
-        private List<string> _Players { get; set; } = new List<string>();
+        private List<string> _Players { get; set; } = [];
         /// <summary>
         /// Returns a list of all connected players
         /// </summary>
-        public List<string> Players => new List<string>(_Players);
+        public List<string> Players => new(this._Players);
         /// <summary>
         /// The underlying <c>LiteNetLib.NetManager</c>
         /// </summary>
@@ -41,18 +41,18 @@ namespace BetterTogetherCore
         /// </summary>
         public EventBasedNetListener Listener { get; private set; } = new EventBasedNetListener();
         private CancellationTokenSource? _PollToken { get; set; } = null;
-        private Dictionary<string, byte[]> _InitStates { get; set; } = new Dictionary<string, byte[]>();
+        private Dictionary<string, byte[]> _InitStates { get; set; } = [];
         private ConcurrentDictionary<string, byte[]> _States { get; set; } = new();
-        private Dictionary<string, ClientRpcAction> RegisteredRPCs { get; set; } = new Dictionary<string, ClientRpcAction>();
-        private Dictionary<string, Action<Packet>> RegisteredEvents { get; set; } = new Dictionary<string, Action<Packet>>();
+        private Dictionary<string, ClientRpcAction> RegisteredRPCs { get; set; } = [];
+        private Dictionary<string, Action<Packet>> RegisteredEvents { get; set; } = [];
 
         /// <summary>
         /// Creates a new BetterClient
         /// </summary>
         public BetterClient()
         {
-            Listener.NetworkReceiveEvent += Listener_NetworkReceiveEvent;
-            Listener.PeerDisconnectedEvent += Listener_PeerDisconnectedEvent;
+            this.Listener.NetworkReceiveEvent += this.Listener_NetworkReceiveEvent;
+            this.Listener.PeerDisconnectedEvent += this.Listener_PeerDisconnectedEvent;
         }
         /// <summary>
         /// Sets the interval between polling events. Default is 15ms
@@ -61,7 +61,7 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient WithPollInterval(int interval)
         {
-            PollInterval = interval;
+            this.PollInterval = interval;
             return this;
         }
         /// <summary>
@@ -71,16 +71,16 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient WithInitStates(Dictionary<string, byte[]> states)
         {
-            _InitStates = states;
+            this._InitStates = states;
             return this;
         }
         private void PollEvents()
         {
-            while (NetManager != null)
+            while (this.NetManager != null)
             {
-                if (_PollToken?.IsCancellationRequested == true) return;
-                NetManager.PollEvents();
-                Thread.Sleep(PollInterval);
+                if (this._PollToken?.IsCancellationRequested == true) return;
+                this.NetManager.PollEvents();
+                Thread.Sleep(this.PollInterval);
             }
         }
         /// <summary>
@@ -91,20 +91,20 @@ namespace BetterTogetherCore
         /// <returns>True if the connection was successful</returns>
         public bool Connect(string host, int port = 9050)
         {
-            NetManager = new NetManager(Listener);
+            this.NetManager = new NetManager(this.Listener);
             try
             {
-                NetManager.Start();
-                ConnectionData connectionData = new ConnectionData("BetterTogether", _InitStates);
-                NetDataWriter writer = new NetDataWriter();
+                this.NetManager.Start();
+                ConnectionData connectionData = new("BetterTogether", this._InitStates);
+                NetDataWriter writer = new();
                 byte[] data = MemoryPackSerializer.Serialize(connectionData);
                 Console.WriteLine(data.Length);
                 writer.Put(data);
-                IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse(host), port);
-                if (NetManager.Connect(endPoint, writer) != null)
+                IPEndPoint endPoint = new(IPAddress.Parse(host), port);
+                if (this.NetManager.Connect(endPoint, writer) != null)
                 {
-                    _PollToken = new CancellationTokenSource();
-                    Thread thread = new Thread(PollEvents);
+                    this._PollToken = new CancellationTokenSource();
+                    Thread thread = new(this.PollEvents);
                     thread.Start();
                     return true;
                 }
@@ -112,8 +112,8 @@ namespace BetterTogetherCore
             }
             catch
             {
-                NetManager.Stop();
-                NetManager = null;
+                this.NetManager.Stop();
+                this.NetManager = null;
                 return false;
             }
         }
@@ -123,14 +123,14 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient Disconnect()
         {
-            _PollToken?.Cancel();
-            if (NetManager == null) return this;
-            Id = "";
-            _Players.Clear();
-            _States.Clear();
-            NetManager.DisconnectPeer(NetManager.FirstPeer);
-            NetManager?.Stop();
-            NetManager = null;
+            this._PollToken?.Cancel();
+            if (this.NetManager == null) return this;
+            this.Id = "";
+            this._Players.Clear();
+            this._States.Clear();
+            this.NetManager.DisconnectPeer(this.NetManager.FirstPeer);
+            this.NetManager?.Stop();
+            this.NetManager = null;
             return this;
         }
         private void Listener_NetworkReceiveEvent(NetPeer peer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
@@ -143,66 +143,68 @@ namespace BetterTogetherCore
                 {
                     case PacketType.Ping:
                         if (packet.Target == "server") _Ping = DateTime.Now;
-                        else if (packet.Target == Id)
+                        else if (packet.Target == this.Id)
                         {
                             _Ping = DateTime.Now;
                         }
                         else if (packet.Target != "server")
                         {
-                            Packet pong = new Packet();
-                            pong.Type = PacketType.Ping;
-                            pong.Target = packet.Target;
-                            pong.Key = "pong";
+                            Packet pong = new()
+                            {
+                                Type = PacketType.Ping,
+                                Target = packet.Target,
+                                Key = "pong"
+                            };
                             peer.Send(pong.Pack(), deliveryMethod);
                         }
                         break;
                     case PacketType.SetState:
                         if (packet.Target == "FORBIDEN")
                         {
-                            _States[packet.Key] = packet.Data;
+                            this._States[packet.Key] = packet.Data;
                         }
-                        _States[packet.Key] = packet.Data;
-                        if (RegisteredEvents.ContainsKey(packet.Key))
+                        this._States[packet.Key] = packet.Data;
+                        if (this.RegisteredEvents.TryGetValue(packet.Key, out Action<Packet>? value))
                         {
-                            RegisteredEvents[packet.Key](packet);
+                            value(packet);
                         }
                         break;
                     case PacketType.Init:
                         var states = packet.GetData<ConcurrentDictionary<string, byte[]>>();
-                        if (states != null) _States = states;
+                        if (states != null) this._States = states;
                         break;
                     case PacketType.RPC:
-                        HandleRPC(packet.Key, packet.Target, packet.Data);
+                        this.HandleRPC(packet.Key, packet.Target, packet.Data);
                         break;
                     case PacketType.DeleteState:
                         List<string>? except = packet.GetData<List<string>>();
-                        if (packet.Target.Length == 36 && Players.Contains(packet.Target))
+                        if (packet.Target.Length == 36 && this.Players.Contains(packet.Target))
                         {
                             if (packet.Key != "")
                             {
-                                DeletePlayerState(packet.Target, packet.Key);
+                                this.DeletePlayerState(packet.Target, packet.Key);
                             }
                             else if (except != null)
                             {
-                                ClearSpecificPlayerStates(packet.Target, except);
+                                this.ClearSpecificPlayerStates(packet.Target, except);
                             }
                         }
                         else if (packet.Target == "players")
                         {
                             if (except != null)
                             {
-                                ClearAllPlayerStates(except);
+                                this.ClearAllPlayerStates(except);
                             }
                         }
                         else if (packet.Target == "global")
                         {
                             if (packet.Key != "")
                             {
-                                DeleteState(packet.Key);
+                                this.DeleteState(packet.Key);
                             }
                             if (except != null)
                             {
-                                ClearAllGlobalStates(except);
+                                this.ClearAllGlobalStates(except);
                             }
                         }
                         break;
@@ -210,20 +212,20 @@ namespace BetterTogetherCore
                         List<string>? list = packet.GetData<List<string>>();
                         if (list != null && list.Count > 0)
                         {
-                            Id = list[0];
-                            _Players = list;
-                            list.Remove(Id);
-                            Connected?.Invoke(Id, list);
+                            this.Id = list[0];
+                            this._Players = list;
+                            list.Remove(this.Id);
+                            Connected?.Invoke(this.Id, list);
                         }
                         break;
                     case PacketType.PeerConnected:
                         string connectedId = Encoding.UTF8.GetString(packet.Data);
-                        _Players.Add(connectedId);
+                        this._Players.Add(connectedId);
                         PlayerConnected?.Invoke(connectedId);
                         break;
                     case PacketType.PeerDisconnected:
                         string disconnectedId = Encoding.UTF8.GetString(packet.Data);
-                        _Players.Remove(disconnectedId);
+                        this._Players.Remove(disconnectedId);
                         PlayerDisconnected?.Invoke(disconnectedId);
                         break;
                     case PacketType.Kick:
@@ -246,53 +248,33 @@ namespace BetterTogetherCore
         /// <summary>
         /// Sends a state object to the server
         /// </summary>
-        /// <param name="key">The name of the state to set</param>
-        /// <param name="data">The MemoryPacked object</param>
-        /// <param name="method">The delivery method of LiteNetLib</param>
-        public void SetState(string key, byte[] data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
-        {
-            if (NetManager == null) return;
-            if (key.Length >= 36 && Utils.guidRegex.IsMatch(key)) return;
-            _States[key] = data;
-            Packet packet = new Packet
-            {
-                Type = PacketType.SetState,
-                Key = key,
-                Data = data
-            };
-            NetManager.FirstPeer.Send(packet.Pack(), method);
-        }
-
-        /// <summary>
-        /// Sends a state object to the server. This state object is owned by the player and only this client or the server can modify it
-        /// </summary>
-        /// <param name="key">The name of the state to set</param>
-        /// <param name="data">The MemoryPacked object</param>
-        /// <param name="method">The delivery method of LiteNetLib</param>
-        public void SetPlayerState(string key, byte[] data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
-        {
-            if (NetManager == null) return;
-            _States[Id + key] = data;
-            Packet packet = new Packet
-            {
-                Type = PacketType.SetState,
-                Target = Id,
-                Key = Id + key,
-                Data = data
-            };
-            NetManager.FirstPeer.Send(packet.Pack(), method);
-        }
-
-        /// <summary>
-        /// Sends a state object to the server
-        /// </summary>
         /// <typeparam name="T">The type of the object. Must be MemoryPackable</typeparam>
         /// <param name="key">The name of the state to set</param>
         /// <param name="data">The object to send. Must be MemoryPackable</param>
         /// <param name="method">The delivery method of LiteNetLib</param>
         public void SetState<T>(string key, T data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
         {
-            SetState(key, MemoryPackSerializer.Serialize(data), method);
+            this.SetState(key, MemoryPackSerializer.Serialize(data), method);
+        }
+
+        /// <summary>
+        /// Sends a state object to the server
+        /// </summary>
+        /// <param name="key">The name of the state to set</param>
+        /// <param name="data">The MemoryPacked object</param>
+        /// <param name="method">The delivery method of LiteNetLib</param>
+        public void SetState(string key, byte[] data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
+        {
+            if (this.NetManager == null) return;
+            if (key.Length >= 36 && Utils.guidRegex.IsMatch(key)) return;
+            this._States[key] = data;
+            Packet packet = new()
+            {
+                Type = PacketType.SetState,
+                Key = key,
+                Data = data
+            };
+            this.NetManager.FirstPeer.Send(packet.Pack(), method);
         }
 
         /// <summary>
@@ -304,7 +286,27 @@ namespace BetterTogetherCore
         /// <param name="method"></param>
         public void SetPlayerState<T>(string key, T data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
         {
-            SetPlayerState(key, MemoryPackSerializer.Serialize(data), method);
+            this.SetPlayerState(key, MemoryPackSerializer.Serialize(data), method);
+        }
+
+        /// <summary>
+        /// Sends a state object to the server. This state object is owned by the player and only this client or the server can modify it
+        /// </summary>
+        /// <param name="key">The name of the state to set</param>
+        /// <param name="data">The MemoryPacked object</param>
+        /// <param name="method">The delivery method of LiteNetLib</param>
+        public void SetPlayerState(string key, byte[] data, DeliveryMethod method = DeliveryMethod.ReliableUnordered)
+        {
+            if (this.NetManager == null) return;
+            this._States[this.Id + key] = data;
+            Packet packet = new()
+            {
+                Type = PacketType.SetState,
+                Target = this.Id,
+                Key = this.Id + key,
+                Data = data
+            };
+            this.NetManager.FirstPeer.Send(packet.Pack(), method);
         }
 
         /// <summary>
@@ -315,11 +317,11 @@ namespace BetterTogetherCore
         /// <returns>The deserialized object or the default value of the expected type</returns>
         public T? GetState<T>(string key)
         {
-            if (_States.ContainsKey(key))
+            if (this._States.TryGetValue(key, out byte[]? value))
             {
-                return MemoryPackSerializer.Deserialize<T>(_States[key]);
+                return MemoryPackSerializer.Deserialize<T>(value);
             }
-            return default(T);
+            return default;
         }
 
         /// <summary>
@@ -332,43 +334,44 @@ namespace BetterTogetherCore
         public T? GetPlayerState<T>(string playerId, string key)
         {
             string finalKey = playerId + key;
-            if (_States.ContainsKey(finalKey))
+            if (this._States.TryGetValue(finalKey, out byte[]? value))
             {
-                return MemoryPackSerializer.Deserialize<T>(_States[finalKey]);
+                return MemoryPackSerializer.Deserialize<T>(value);
             }
-            return default(T);
+            return default;
         }
 
         private void DeleteState(string key)
         {
-            _States.TryRemove(key, out _);
+            this._States.TryRemove(key, out _);
         }
+
         private void ClearAllGlobalStates(List<string> except)
         {
-            var globalStates = _States.Where(x => !Utils.guidRegex.IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
+            var globalStates = this._States.Where(x => !Utils.guidRegex.IsMatch(x.Key) && !except.Contains(x.Key)).ToList();
             foreach (var state in globalStates)
             {
-                _States.TryRemove(state.Key, out _);
+                this._States.TryRemove(state.Key, out _);
             }
         }
         private void DeletePlayerState(string player, string key)
         {
-            _States.TryRemove(player + key, out _);
+            this._States.TryRemove(player + key, out _);
         }
         private void ClearSpecificPlayerStates(string player, List<string> except)
         {
             foreach (var key in except)
             {
-                _States.TryRemove(player + key, out _);
+                this._States.TryRemove(player + key, out _);
             }
         }
         private void ClearAllPlayerStates(List<string> except)
         {
-            Regex regex = new Regex(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
-            var playerStates = _States.Where(x => regex.IsMatch(x.Key) && !except.Contains(x.Key.Substring(0, 36))).ToList();
+            Regex regex = new(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
+            var playerStates = this._States.Where(x => regex.IsMatch(x.Key) && !except.Contains(x.Key[..36])).ToList();
             foreach (var state in playerStates)
             {
-                _States.TryRemove(state.Key, out _);
+                this._States.TryRemove(state.Key, out _);
             }
         }
 
@@ -380,14 +383,14 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RegisterRPC(string method, ClientRpcAction action)
         {
-            RegisteredRPCs[method] = action;
+            this.RegisteredRPCs[method] = action;
             return this;
         }
         private void HandleRPC(string method, string player, byte[] args)
         {
-            if (RegisteredRPCs.ContainsKey(method))
+            if (this.RegisteredRPCs.TryGetValue(method, out ClientRpcAction? value))
             {
-                RegisteredRPCs[method](player, args);
+                value(player, args);
             }
         }
 
@@ -400,15 +403,15 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RpcSelf(string method, byte[] args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
-            if (NetManager == null) return this;
-            Packet packet = new Packet
+            if (this.NetManager == null) return this;
+            Packet packet = new()
             {
                 Type = PacketType.RPC,
                 Target = "self",
                 Key = method,
                 Data = args
             };
-            NetManager.FirstPeer.Send(packet.Pack(), delMethod);
+            this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
         /// <summary>
@@ -422,7 +425,7 @@ namespace BetterTogetherCore
         public BetterClient RpcSelf<T>(string method, T args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
             byte[] bytes = MemoryPackSerializer.Serialize(args);
-            return RpcSelf(method, bytes, delMethod);
+            return this.RpcSelf(method, bytes, delMethod);
         }
 
         /// <summary>
@@ -435,15 +438,15 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RpcPlayer(string method, string target, byte[] args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
-            if (NetManager == null) return this;
-            Packet packet = new Packet
+            if (this.NetManager == null) return this;
+            Packet packet = new()
             {
                 Type = PacketType.RPC,
                 Target = target,
                 Key = method,
                 Data = args
             };
-            NetManager.FirstPeer.Send(packet.Pack(), delMethod);
+            this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
         /// <summary>
@@ -458,7 +461,7 @@ namespace BetterTogetherCore
         public BetterClient RpcPlayer<T>(string method, string target, T args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
             byte[] bytes = MemoryPackSerializer.Serialize(args);
-            return RpcPlayer(method, target, bytes, delMethod);
+            return this.RpcPlayer(method, target, bytes, delMethod);
         }
 
         /// <summary>
@@ -470,15 +473,15 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RpcAll(string method, byte[] args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
-            if (NetManager == null) return this;
-            Packet packet = new Packet
+            if (this.NetManager == null) return this;
+            Packet packet = new()
             {
                 Type = PacketType.RPC,
                 Target = "all",
                 Key = method,
                 Data = args
             };
-            NetManager.FirstPeer.Send(packet.Pack(), delMethod);
+            this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
         /// <summary>
@@ -492,7 +495,7 @@ namespace BetterTogetherCore
         public BetterClient RpcAll<T>(string method, T args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
             byte[] bytes = MemoryPackSerializer.Serialize(args);
-            return RpcAll(method, bytes, delMethod);
+            return this.RpcAll(method, bytes, delMethod);
         }
 
         /// <summary>
@@ -504,15 +507,15 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RpcOthers(string method, byte[] args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
-            if (NetManager == null) return this;
-            Packet packet = new Packet
+            if (this.NetManager == null) return this;
+            Packet packet = new()
             {
                 Type = PacketType.RPC,
                 Target = "others",
                 Key = method,
                 Data = args
             };
-            NetManager.FirstPeer.Send(packet.Pack(), delMethod);
+            this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
         /// <summary>
@@ -526,7 +529,7 @@ namespace BetterTogetherCore
         public BetterClient RpcOthers<T>(string method, T args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
             byte[] bytes = MemoryPackSerializer.Serialize(args);
-            return RpcOthers(method, bytes, delMethod);
+            return this.RpcOthers(method, bytes, delMethod);
         }
 
         /// <summary>
@@ -538,15 +541,15 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient RpcServer(string method, byte[] args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
-            if (NetManager == null) return this;
-            Packet packet = new Packet
+            if (this.NetManager == null) return this;
+            Packet packet = new()
             {
                 Type = PacketType.RPC,
                 Target = "server",
                 Key = method,
                 Data = args
             };
-            NetManager.FirstPeer.Send(packet.Pack(), delMethod);
+            this.NetManager.FirstPeer.Send(packet.Pack(), delMethod);
             return this;
         }
         /// <summary>
@@ -560,7 +563,7 @@ namespace BetterTogetherCore
         public BetterClient RpcServer<T>(string method, T args, DeliveryMethod delMethod = DeliveryMethod.ReliableOrdered)
         {
             byte[] bytes = MemoryPackSerializer.Serialize(args);
-            return RpcServer(method, bytes, delMethod);
+            return this.RpcServer(method, bytes, delMethod);
         }
         /// <summary>
         /// A delegate for RPC actions on the client
@@ -577,7 +580,7 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient On(string key, Action<Packet> action)
         {
-            RegisteredEvents[key] = action;
+            this.RegisteredEvents[key] = action;
             return this;
         }
         /// <summary>
@@ -587,7 +590,7 @@ namespace BetterTogetherCore
         /// <returns>This client</returns>
         public BetterClient Off(string key)
         {
-            RegisteredEvents.Remove(key);
+            this.RegisteredEvents.Remove(key);
             return this;
         }
 
@@ -600,14 +603,14 @@ namespace BetterTogetherCore
         /// <returns>The delay as a <c>TimeSpan</c></returns>
         public async Task<TimeSpan> PingServer(int timeout = 2000, DeliveryMethod method = DeliveryMethod.Unreliable)
         {
-            if (NetManager == null) return TimeSpan.Zero;
-            DateTime start = DateTime.Now;
-            Packet packet = new Packet
+            if (this.NetManager == null) return TimeSpan.Zero;
+
+            Packet packet = new()
             {
                 Target = "server",
                 Type = PacketType.Ping
             };
-            NetManager.FirstPeer.Send(packet.Pack(), method);
+            this.NetManager.FirstPeer.Send(packet.Pack(), method);
             DateTime now = DateTime.Now;
             TimeSpan delay = now - await Task.Run(() =>
             {
@@ -632,14 +635,14 @@ namespace BetterTogetherCore
         /// <returns>The delay as a <c>TimeSpan</c></returns>
         public async Task<TimeSpan> PingPlayer(string playerId, int timeout = 2000, DeliveryMethod method = DeliveryMethod.Unreliable)
         {
-            if (NetManager == null) return TimeSpan.Zero;
-            DateTime start = DateTime.Now;
-            Packet packet = new Packet
+            if (this.NetManager == null) return TimeSpan.Zero;
+
+            Packet packet = new()
             {
                 Target = playerId,
                 Type = PacketType.Ping
             };
-            NetManager.FirstPeer.Send(packet.Pack(), method);
+            this.NetManager.FirstPeer.Send(packet.Pack(), method);
             DateTime now = DateTime.Now;
             TimeSpan delay = now - await Task.Run(() =>
             {

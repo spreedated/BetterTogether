@@ -21,8 +21,9 @@ namespace BetterTogetherCore
             }
             return true;
         }
-        public static Regex guidRegex = new Regex(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
+        public static Regex guidRegex = new(@"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
     }
+
     /// <summary>
     /// THis struct is sent to the server to establish a connection along with initial states
     /// </summary>
@@ -36,7 +37,7 @@ namespace BetterTogetherCore
         /// <summary>
         /// The initial states
         /// </summary>
-        public Dictionary<string, byte[]> InitStates { get; set; } = new Dictionary<string, byte[]>();
+        public Dictionary<string, byte[]> InitStates { get; set; } = [];
 
         /// <summary>
         /// Constructor 
@@ -48,7 +49,7 @@ namespace BetterTogetherCore
         /// <param name="key">The key</param>
         public ConnectionData(string key)
         {
-            Key = key;
+            this.Key = key;
         }
         /// <summary>
         /// Constructor with key and initial states
@@ -58,8 +59,8 @@ namespace BetterTogetherCore
         [MemoryPackConstructor]
         public ConnectionData(string key, Dictionary<string, byte[]> initStates)
         {
-            Key = key;
-            InitStates = initStates;
+            this.Key = key;
+            this.InitStates = initStates;
         }
         /// <summary>
         /// Sets the specified state
@@ -70,7 +71,7 @@ namespace BetterTogetherCore
         /// <returns>This object</returns>
         public readonly ConnectionData SetState<T>(string key, T data)
         {
-            InitStates[key] = MemoryPackSerializer.Serialize(data);
+            this.InitStates[key] = MemoryPackSerializer.Serialize(data);
             return this;
         }
         /// <summary>
@@ -80,7 +81,7 @@ namespace BetterTogetherCore
         /// <returns>This object</returns>
         public readonly ConnectionData DeleteState(string key)
         {
-            InitStates.Remove(key);
+            this.InitStates.Remove(key);
             return this;
         }
     }

@@ -1,5 +1,4 @@
 ﻿using MemoryPack;
-using System;
 
 namespace BetterTogetherCore
 {
@@ -21,7 +20,7 @@ namespace BetterTogetherCore
         /// <summary>
         /// The data of the packet. This can be anything Memorypack can handle.
         /// </summary>
-        public byte[] Data { get; set; } = Array.Empty<byte>();
+        public byte[] Data { get; set; } = [];
 
         /// <summary>
         /// Empty constructor
@@ -38,10 +37,10 @@ namespace BetterTogetherCore
         [MemoryPackConstructor]
         public Packet(PacketType type, string target, string key, byte[] data)
         {
-            Type = type;
-            Target = target;
-            Key = key;
-            Data = data;
+            this.Type = type;
+            this.Target = target;
+            this.Key = key;
+            this.Data = data;
         }
         /// <summary>
         /// Create a new packet with the specified data type. MemoryPack can't serialize <c>object</c> so generics are used.
@@ -59,10 +58,10 @@ namespace BetterTogetherCore
         /// </summary>
         /// <typeparam name="T">The type of the expected object</typeparam>
         /// <returns>The deserialized object or <c>null</c></returns>
-        public T? GetData<T>()
+        public readonly T? GetData<T>()
         {
-            if (Data.Length == 0) return default(T?); // Return null if the data is empty (no data to deserialize
-            return MemoryPackSerializer.Deserialize<T>(Data);
+            if (this.Data.Length == 0) return default; // Return null if the data is empty (no data to deserialize
+            return MemoryPackSerializer.Deserialize<T>(this.Data);
         }
         /// <summary>
         /// Sets the data of the packet to the specified object
@@ -71,14 +70,14 @@ namespace BetterTogetherCore
         /// <param name="data">The object to serialize. The object must be Memorypackable.</param>
         public void SetData<T>(T data)
         {
-            Data = MemoryPackSerializer.Serialize(data);
+            this.Data = MemoryPackSerializer.Serialize(data);
         }
 
         /// <summary>
         /// Serializes the packet
         /// </summary>
         /// <returns>The serialized packet</returns>
-        public byte[] Pack()
+        public readonly byte[] Pack()
         {
             return MemoryPackSerializer.Serialize(this);
         }
