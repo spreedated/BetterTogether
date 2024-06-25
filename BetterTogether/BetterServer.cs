@@ -1,5 +1,6 @@
-﻿using BetterTogether.Extensions;
-using BetterTogether.Enumerations;
+﻿using BetterTogether.Enumerations;
+using BetterTogether.Extensions;
+using BetterTogether.Models;
 using BetterTogetherCore.Models;
 using LiteNetLib;
 using MemoryPack;
@@ -251,10 +252,10 @@ namespace BetterTogetherCore
                 request.Reject(Encoding.UTF8.GetBytes(reason));
                 return;
             }
-            if (data.Value.Key == "BetterTogether")
+            if (data.Key == "BetterTogether")
             {
                 request.Accept();
-                foreach (var state in data.Value.InitStates)
+                foreach (var state in data.InitStates)
                 {
                     if (this.ReservedStates.Contains(state.Key)) continue;
                     if (state.Key.FastStartsWith("[player]"))

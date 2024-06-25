@@ -1,5 +1,6 @@
-﻿using BetterTogether.Extensions;
-using BetterTogether.Enumerations;
+﻿using BetterTogether.Enumerations;
+using BetterTogether.Extensions;
+using BetterTogether.Models;
 using BetterTogetherCore.Models;
 using LiteNetLib;
 using LiteNetLib.Utils;
