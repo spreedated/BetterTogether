@@ -20,6 +20,8 @@
     <PackageTags>udp;multiplayer;networking;unity;easy;simple</PackageTags>
     <PackageReleaseNotes>Changelog available at https://github.com/ZedDevStuff/BetterTogether/blob/master/CHANGELOG.md</PackageReleaseNotes>
     <GeneratePackageOnBuild Condition=" '$(Configuration)' == 'Release'">True</GeneratePackageOnBuild>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>bt.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>
