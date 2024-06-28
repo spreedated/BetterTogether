@@ -58,7 +58,7 @@ namespace BetterTogether.Models
         /// <param name="target">The target of the packet</param>
         /// <param name="key">The key of the packet</param>
         /// <param name="data">The object to send. Must be Memorypackable</param>
-        public static Packet New<T>(PacketType type, string target, string key, T data)
+        public static Packet New<T>(PacketType type, string target, string key, T data) where T : IMemoryPackable<T>
         {
             return new Packet(type, target, key, MemoryPackSerializer.Serialize(data));
         }
