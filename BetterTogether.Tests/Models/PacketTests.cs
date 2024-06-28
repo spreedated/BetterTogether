@@ -1,5 +1,5 @@
-﻿using BetterTogether.Extensions;
-using BetterTogether.Enumerations;
+﻿using BetterTogether.Enumerations;
+using BetterTogether.Extensions;
 using BetterTogether.Models;
 using MemoryPack;
 
@@ -121,7 +121,7 @@ namespace BetterTogether.Tests.Models
         public void Pack_SerializesPacketToByteArray()
         {
             // Arrange
-            var packet = new Packet(PacketType.SetState, "server", "key", [1, 2, 3 ]);
+            var packet = new Packet(PacketType.SetState, "server", "key", [1, 2, 3]);
 
             // Act
             var serializedPacket = packet.Pack();
