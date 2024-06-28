@@ -9,7 +9,7 @@ namespace BetterTogether.Extensions
         /// </summary>
         /// <typeparam name="T">The type of the expected object</typeparam>
         /// <returns>The deserialized object or <c>null</c></returns>
-        public static T? GetData<T>(this BetterTogether.Models.Packet packet)
+        public static T? GetData<T>(this Models.Packet packet)
         {
             if (packet.Data.Length == 0)
             {
@@ -24,7 +24,7 @@ namespace BetterTogether.Extensions
         /// </summary>
         /// <typeparam name="T"><c>MemoryPackable</c> object</typeparam>
         /// <param name="data">The object to serialize. The object must be Memorypackable.</param>
-        public static void SetData<T>(this BetterTogether.Models.Packet packet, T data)
+        public static void SetData<T>(this Models.Packet packet, T data)
         {
             packet.Data = MemoryPackSerializer.Serialize(data);
         }
@@ -33,7 +33,7 @@ namespace BetterTogether.Extensions
         /// Serializes the packet
         /// </summary>
         /// <returns>The serialized packet</returns>
-        public static byte[] Pack(this BetterTogether.Models.Packet packet)
+        public static byte[] Pack(this Models.Packet packet)
         {
             return MemoryPackSerializer.Serialize(packet);
         }
