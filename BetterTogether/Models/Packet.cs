@@ -1,7 +1,7 @@
 ﻿using BetterTogether.Enumerations;
 using MemoryPack;
 
-namespace BetterTogetherCore.Models
+namespace BetterTogether.Models
 {
     [MemoryPackable]
     public partial record Packet

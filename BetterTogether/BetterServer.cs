@@ -1,7 +1,6 @@
 ﻿using BetterTogether.Enumerations;
 using BetterTogether.Extensions;
 using BetterTogether.Models;
-using BetterTogetherCore.Models;
 using LiteNetLib;
 using MemoryPack;
 using Microsoft.Extensions.Logging;
@@ -14,7 +13,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BetterTogetherCore
+namespace BetterTogether
 {
     /// <summary>
     /// The BetterTogether server. Create one with a max player count then use the Start method to start the server on the specified port. Set the <c>DataReceived</c> <c>Func<![CDATA[<]]>NetPeer, Packet, Packet<![CDATA[>]]></c> for your data validation and handling.
@@ -285,7 +284,7 @@ namespace BetterTogetherCore
                 request.Reject(Encoding.UTF8.GetBytes(reason));
                 return;
             }
-            if (data.Key == "BetterTogether")
+            if (data.Key == Constants.DEFAULT_KEY)
             {
                 request.Accept();
                 foreach (var state in data.InitStates)

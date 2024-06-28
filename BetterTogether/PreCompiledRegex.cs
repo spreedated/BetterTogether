@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace BetterTogetherCore
+namespace BetterTogether
 {
     internal static partial class PreCompiledRegex
     {

@@ -12,7 +12,7 @@ namespace BetterTogether.Models
         /// <summary>
         /// The key of the connection
         /// </summary>
-        public string Key { get; set; } = "BetterTogether";
+        public string Key { get; set; } = Constants.DEFAULT_KEY;
 
         /// <summary>
         /// The initial states

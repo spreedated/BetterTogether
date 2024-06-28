@@ -1,7 +1,6 @@
 ﻿using BetterTogether.Enumerations;
 using BetterTogether.Extensions;
 using BetterTogether.Models;
-using BetterTogetherCore.Models;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using MemoryPack;
@@ -15,7 +14,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BetterTogetherCore
+namespace BetterTogether
 {
     /// <summary>
     /// A BetterTogether client that connects to a BetterTogether server
@@ -142,7 +141,7 @@ namespace BetterTogetherCore
             try
             {
                 this.NetManager.Start();
-                ConnectionData connectionData = new("BetterTogether", this._InitStates);
+                ConnectionData connectionData = new(Constants.DEFAULT_KEY, this._InitStates);
                 NetDataWriter writer = new();
                 byte[] data = MemoryPackSerializer.Serialize(connectionData);
                 this._Logger?.LogTrace("Data length \"{Length}\"", data.Length);
